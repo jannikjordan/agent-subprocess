@@ -46,8 +46,8 @@ before approving a release PR. Signed-in provider checks run on an
 authorized local host.
 
 Release automation tests use synthetic GitHub responses. After an approved
-version bump reaches `main`, check the Publish release run and verify the
-tag points to the merged commit and the notes match `CHANGELOG.md`.
+version bump reaches `main`, open the **Publish source release** run. Verify
+the tag points to the merged commit and the notes match `CHANGELOG.md`.
 
 ## Consuming project checks
 
