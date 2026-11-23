@@ -128,10 +128,10 @@ Path({str(capture)!r}).write_text(json.dumps({{
 
     async def test_claude_file_prompt_deltas_and_final_snapshot(self):
         instructions = self.workspace / "task.md"
-        instructions.write_text("Instructions from a file.\n", encoding="utf-8")
+        instructions.write_bytes(b"Instructions from a file.\r\n")
         binary = self.fake(
             """
-assert sys.stdin.buffer.read() == b'Instructions from a file.\\n'
+assert sys.stdin.buffer.read() == b'Instructions from a file.\\r\\n'
 assert '--safe-mode' in sys.argv and '--restricted' in sys.argv
 assert '--disable-slash-commands' in sys.argv and '--strict-mcp-config' in sys.argv
 assert sys.argv[sys.argv.index('--tools') + 1] == ''
@@ -149,8 +149,8 @@ assert os.getenv('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC') == '1'
             "claude", model="haiku", effort="low", prompt=Prompt.from_file(instructions)
         )
         events, result = await self.stream(client, request)
+        self.assertEqual(result.status, "succeeded", result.error)
         self.assertEqual([e.text for e in events if e.text], ["Read", "Ready."])
-        self.assertEqual(result.status, "succeeded")
         self.assertEqual(result.actual_model, "test-model")
         self.assertEqual(result.native_session_id, "test-session")
         self.assertEqual(result.usage, {"output_tokens": 2})

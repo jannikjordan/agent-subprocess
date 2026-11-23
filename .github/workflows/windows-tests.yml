@@ -12,7 +12,7 @@ jobs:
   fixtures:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'run-windows-tests'
     runs-on: windows-2025
-    timeout-minutes: 5
+    timeout-minutes: 4
     env:
       DO_NOT_TRACK: '1'
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
