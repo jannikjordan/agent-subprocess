@@ -61,9 +61,9 @@ before adding them.
 ## Git
 
 - Use `dev` for integration and `main` for owner-controlled promotion and
-  releases. Open release PRs from tested `dev` revisions. Check the macOS,
-  Windows and Linux workflow results before asking the owner to approve
-  `main`.
+  releases. Cut a short-lived release branch from tested `dev` and open its
+  PR into `main`. Check the macOS, Windows and Linux workflow results before
+  asking the owner to approve `main`.
 - Branch from current `dev` as `type/slug`. Use one branch and one PR per
   task. Use `type(scope): subject` with a lowercase imperative subject.
   Preserve shared history and run the hooks. Update a shared task branch by
@@ -74,8 +74,9 @@ before adding them.
 - Open a draft PR into `dev` when a remote exists. Include the scope, checks,
   remaining gaps and issue link where applicable. The Orchestrator can mark
   it ready and integrate it after independent review and green required
-  checks. Required branch protections apply when configured. Promotion to
-  `main`, releases and tags require the owner.
+  checks. Required branch protections apply. The owner approves promotion to
+  `main`. The release workflow publishes the tag and notes when a version
+  bump reaches `main`.
 - After integration, remove the merged work branch locally and on the remote.
   Confirm its head is reachable from the target and check active worktrees
   before deleting it. Preserve `dev`, `main` and branches with unmerged work.

@@ -2,16 +2,17 @@
 
 ## Pin a version
 
-Pick an approved version in [Releases](https://github.com/jannikjordan/provider-cli-proxy/releases)
-and install its tag. Replace `vX.Y.Z` with the tag you selected.
+Pick a published tag from [Releases](https://github.com/jannikjordan/provider-cli-proxy/releases).
+Replace `vX.Y.Z` with that tag. While a release is pending, install from the
+full commit SHA you reviewed.
 
 ```sh
 python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@vX.Y.Z"
 ```
 
-Use a full reviewed commit SHA for a development build. The package version
-in `pyproject.toml` tracks the Python API. CLI compatibility is a separate
-pin in the [provider guide](providers.md). Check both when upgrading.
+The package version in `pyproject.toml` tracks the Python API. CLI
+compatibility is a separate pin in the [provider guide](providers.md).
+Check both when upgrading.
 
 ## Report bugs and request changes
 
@@ -34,9 +35,13 @@ prompts out of issues.
   release PR. During `0.x`, use a minor version for new API behavior or
   breaking changes and a patch for compatible fixes. Call out changes that
   require a consuming project to adapt.
-- A release PR targets `main` and runs the three platform workflows. After
-  owner approval and merge, the owner tags the commit `vX.Y.Z`. The GitHub
-  release notes use that version's changelog entry.
-- Consumers install from Git tags. Release checks build and install the
-  package during verification. The tag and notes are the distribution for
-  this private library.
+- Cut a short-lived release branch from tested `dev` and open a PR into
+  `main`. It runs the three platform checks. After the owner approves and
+  merges it, the release workflow tags the merged commit `vX.Y.Z` and
+  publishes that version's changelog entry in GitHub Releases.
+- Each version publishes once. If publishing fails, inspect the run and
+  rerun it on the same commit. The job can reuse a tag at that commit from
+  a partial run. It stops if the tag points elsewhere.
+- Consumers install from Git tags. The checks build and install the package
+  for verification. The tag and notes are the distribution for this private
+  library.
