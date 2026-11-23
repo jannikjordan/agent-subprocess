@@ -1,9 +1,8 @@
 # Integrate with an existing Python project
 
-The examples use the [proposed API](session-contract.md). They illustrate
-where the proxy fits in code that already has application settings and a
-worker or request handler. Package installation and runtime execution are
-pending implementation.
+The examples use the [public Python API](session-contract.md). Install the
+package and run the [offline example](../README.md#try-it-without-a-provider-account)
+to see the proxy in a worker or request handler without using an account.
 
 ## Set up the worker
 
@@ -29,13 +28,13 @@ The settings values come from the consuming project.
 ```python
 from pathlib import Path
 
-from provider_cli_proxy import Client, Prompt, RunRequest, RunResult
+from provider_cli_proxy import Client, Prompt, Provider, RunRequest, RunResult
 
 
 async def analyze(
     client: Client,
     *,
-    provider: str,
+    provider: Provider,
     model: str,
     effort: str,
     workspace: Path,
@@ -83,7 +82,7 @@ async def assistant_events(
 
 Append `answer_delta` and replace the current answer on `answer_snapshot`.
 On `finished`, use the terminal result as the authoritative final answer and
-status. Feed `activity` and `report` into the progress UI. Some providers or
+status. Feed `activity` into the progress UI. Some providers or
 runs produce no progress between start and completion. On disconnect, close
 the iterator so a request-scoped session can cancel and clean up. For work
 that should outlive the connection, run it in the app's worker and subscribe
@@ -92,12 +91,12 @@ to the app's job events from the browser.
 ## Run from an existing job queue
 
 - Let the queue own the durable job ID and the worker own each live proxy
-  session. Map the job ID and attempt ID to the proxy run ID. Record a native
-  session ID only when your app needs explicit resume.
+  session. Map the job ID and attempt ID to the proxy run ID. Native IDs are
+  optional diagnostic metadata in this release.
 - Publish events under the app's job access rules and store the result after
-  checking its terminal status. For a machine-readable handoff, request
-  schema-validated output when the feature is available. Validate business
-  rules in the app before taking an action.
+  checking its terminal status. For a machine-readable handoff, parse and
+  validate the answer in the app before taking an action. See the
+  [plan](plan.md) for native schema support.
 - Route user cancellation to the worker that owns the live session.
   Base retry decisions on the error and any side effects of the previous
   attempt. On worker loss, use the queue's reconciliation and retry policy.

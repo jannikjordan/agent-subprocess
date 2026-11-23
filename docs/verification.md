@@ -1,7 +1,15 @@
 # Verification
 
-The checks below define future acceptance. The current repository holds the
-design. The [provider guide](providers.md) records installed CLI help checks.
+Install the package in an isolated environment using the
+[README](../README.md), then run the library and example suites:
+
+```sh
+python -m unittest discover -s tests
+python -m unittest discover -s examples/analysis_job
+```
+
+The [provider guide](providers.md) records the versions exercised in live
+smoke tests. The checks below describe the evidence a release needs.
 
 ## Library checks
 

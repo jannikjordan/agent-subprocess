@@ -1,13 +1,18 @@
 # Provider compatibility
 
-The adapters use the official binaries installed on the worker. On
-2026-11-23, local `--version` and `--help` checks identified these starting
-versions. The library has no verified runtime or permission profiles yet.
+The adapters use the official binaries installed on the worker. The table
+records live smoke tests through the Python API on macOS 27.2 on 2026-11-23.
+Both CLIs used their existing signed-in accounts and synthetic inputs.
 
-| Provider | Observed CLI version | Initial transport | Stream granularity |
-| --- | --- | --- | --- |
-| Codex | `0.171.0` | `codex exec --json` | JSONL lifecycle, activity and completed assistant messages |
-| Claude Code | `2.1.330` | `claude --print --output-format stream-json --verbose` | JSONL messages and results. `--include-partial-messages` asks for text deltas when used with stream JSON. |
+| Provider | CLI version | Model and effort requested | Verified profiles | Answer events |
+| --- | --- | --- | --- | --- |
+| Codex | `0.171.0` | `gpt-6-luna`, `low` | `prompt_only`, `workspace_read` | Completed snapshots |
+| Claude Code | `2.1.330` | `haiku`, `low` | `prompt_only`, `workspace_read` | Text deltas and completed snapshots |
+
+`workspace_read` checks the installed CLI version and is currently available
+only on macOS with the exact versions in the table. Linux uses the same
+Python API and process runner. Its test coverage uses fixture CLIs. Live
+Linux inference and native session resume have no verification record yet.
 
 ## Codex
 
@@ -16,15 +21,20 @@ versions. The library has no verified runtime or permission profiles yet.
   `model_reasoning_effort` config override. Use the caller's selected
   directory as the child working directory. `--skip-git-repo-check` is
   available for authorized workspaces outside Git.
-- Sandbox and approval policy are separate settings. To verify a permission
-  profile, check what can run through hooks, tool servers and other host
-  tools in addition to checking whether file writes are blocked.
+- `prompt_only` disables shell access and other host integrations. Codex
+  runs without the user config. The wrapper refuses workspaces with project
+  `.codex` configuration so it can avoid loading their hooks or tool servers.
+- `workspace_read` enables Codex's bounded shell profile. Agent commands may
+  read the approved workspace and Codex's `:minimal` runtime system paths.
+  The native sandbox probe allowed the workspace read and denied writes, a
+  read outside the workspace, a symlink escape and a loopback connection.
 - `exec --json` emits structured work events and completed messages. To
   support live answer deltas or richer turn controls, evaluate Codex App
   Server over stdio as a separate transport behind the same adapter contract.
 
 [Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
 [Configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+[Permission profiles](https://learn.chatgpt.com/docs/permissions)
 [App Server](https://learn.chatgpt.com/docs/app-server)
 
 ## Claude Code
@@ -32,11 +42,12 @@ versions. The library has no verified runtime or permission profiles yet.
 - Print mode supports text input and `--model` and `--effort`. Available
   effort levels depend on model and CLI version. The final `result` event
   carries the outcome. Inspect it alongside the process exit status.
-- Verify effective restrictions for every supported profile. Permission
-  modes govern tool decisions. Tool selection, safe mode, strict MCP config
-  and `--permission-prompts none` affect different parts of the boundary.
-  Normal print mode can load workspace customizations, so confirm the
-  effective behavior before advertising a restricted profile.
+- Claude starts in safe and restricted modes with MCP and approval prompts
+  disabled. `prompt_only` exposes no built-in tools. `workspace_read`
+  selects `Read`, `Glob` and `Grep` within the working directory. The live
+  fixture read returned only the approved workspace marker and a fixture
+  project hook did not run. The live CLI reported `claude-haiku-5-5` for the
+  `haiku` alias.
 - Leave login with the official binary. For hosted use, check the intended
   authentication and deployment model against Anthropic's terms.
 
@@ -46,20 +57,17 @@ versions. The library has no verified runtime or permission profiles yet.
 
 ## Model, permissions and metadata
 
-Accept the caller's requested provider, model and effort. Validate supported
-settings where the runtime reports them reliably. Expose the actual model
-  only when the provider reports it. Missing login, exhausted usage and an
-unsupported model are separate outcomes whenever the adapter can tell them
-apart. Keep provider selection and billing mode fixed for a run.
+The wrapper forwards model and effort. `actual_model` is present when the
+provider reports it. The tested Codex transport omitted it. Missing login,
+exhausted usage and an unsupported model are separate outcomes when the
+adapter can recognize them. Account and extra-usage settings stay with the
+provider CLI and the account owner.
 
-Restrict the environment and configuration passed to the child to the job's
-approved setup. An allowed working directory is a starting location. Use
-verified provider restrictions and host isolation for access boundaries.
-Before advertising a permission profile, record the effective tools, file
-access, network access, and inherited settings checked on the target OS.
+The child inherits a small set of process environment variables. Use a
+dedicated trusted host with trusted system and administrator configuration.
+Managed configuration can take precedence over CLI options. For separate
+users or untrusted workloads, apply an independent OS or container boundary
+and validate it before sharing the worker.
 
-For each tested release, record OS and CLI version, model and effort,
-authentication mode without account identifiers, permission profile, event
-kinds, cancellation behavior, and resume if supported. Mark each capability
-as help-confirmed, runtime-verified or unverified. The Corduno reference app
-has its own runtime evidence for older versions. [Corduno provider evidence](https://github.com/getcorduno/documentation/blob/59f041cd0061105c63e58772fa54e1b0d82bbb71/evidence/providers.md)
+The Corduno reference app has separate runtime evidence for older versions.
+[Corduno provider evidence](https://github.com/getcorduno/documentation/blob/59f041cd0061105c63e58772fa54e1b0d82bbb71/evidence/providers.md)

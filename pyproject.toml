@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provider-cli-proxy"
+version = "0.1.0"
+description = "Run Codex and Claude Code sessions from Python"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+provider_cli_proxy = ["py.typed"]
