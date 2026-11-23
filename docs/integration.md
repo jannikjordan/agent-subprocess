@@ -96,8 +96,7 @@ to the app's job events from the browser.
   optional diagnostic metadata in this release.
 - Publish events under the app's job access rules and store the result after
   checking its terminal status. For a machine-readable handoff, parse and
-  validate the answer in the app before taking an action. See the
-  [plan](plan.md) for native schema support.
+  validate the answer in the app before taking an action.
 - Route user cancellation to the worker that owns the live session.
   Base retry decisions on the error and any side effects of the previous
   attempt. On worker loss, use the queue's reconciliation and retry policy.

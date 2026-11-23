@@ -1,61 +1,60 @@
-# Provider CLI Proxy
+<p align="center">
+  <img src="assets/readme/cover.webp" width="900" alt="Mint and orange signal paths meet at a terminal relay.">
+</p>
 
-Run Codex and Claude Code from Python. Send a prompt to an installed CLI,
-wait for the final answer or stream activity and answer updates into an
-existing application.
+<h1 align="center">Provider CLI Proxy</h1>
 
-Use it for a one-off analysis script, a worker that handles jobs from your
-queue, or the provider layer behind an embedded assistant. Your application
-chooses the task, owns the queue and permissions, and decides how to display
-or use the answer.
+<p align="center">
+  Run local AI CLI sessions from Python, with live events and a result your app can use.
+</p>
 
-## Try it without a provider account
+<p align="center">
+  <img src="assets/readme/codex.svg" width="28" height="28" align="middle" alt=""> <strong>Codex</strong>
+  &nbsp;&nbsp;&nbsp;
+  <img src="assets/readme/claude.svg" width="28" height="28" align="middle" alt=""> <strong>Claude Code</strong>
+</p>
 
-Use Python 3.11 or newer on macOS, Windows or Linux. On macOS or Linux,
-run these commands from the repository root:
+<p align="center">
+  <a href="#quick-start">Quick start</a> &nbsp;·&nbsp;
+  <a href="docs/README.md">Documentation</a> &nbsp;·&nbsp;
+  <a href="examples/analysis_job/README.md">Example project</a> &nbsp;·&nbsp;
+  <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp;
+  <a href="https://github.com/jannikjordan/provider-cli-proxy/issues">Issues</a>
+</p>
 
-```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install .
-python examples/analysis_job/analyze.py run --provider codex
-python examples/analysis_job/analyze.py stream --provider claude
+## What you can do
+
+- **Find a provider.** Discover supported CLI installs through PATH, native installers, Homebrew, WinGet, npm and known macOS desktop bundles.
+- **Check readiness.** List located CLIs, their versions, subscription sign-in and available quota windows. A run checks sign-in before sending its prompt.
+- **Run or stream.** Pass a prompt or a UTF-8 task file, then wait for the final result or stream updates to a terminal, web app or job worker.
+- **Control each run.** Choose the provider, model, effort, working directory and permission profile. Set a deadline or cancel the process tree.
+- **Use your existing Python stack.** The library targets Python 3.11+ on macOS, Windows and Linux and has no runtime dependencies.
+
+## How a run works
+
+```mermaid
+flowchart LR
+    App["Python app or worker"] --> Detect["Find CLI and check version"]
+    Detect --> SignIn{"Subscription ready?"}
+    SignIn -- Yes --> CLI["Codex or Claude Code"]
+    CLI --> Proxy["Normalize events and result"]
+    Proxy --> App
+    SignIn -- No --> Error["Return a typed error"]
+    Error --> App
 ```
 
-On Windows, use PowerShell:
+## Quick start
 
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install .
-.\.venv\Scripts\python.exe examples/analysis_job/analyze.py run --provider codex
-.\.venv\Scripts\python.exe examples/analysis_job/analyze.py stream --provider claude
-```
-
-The example uses fake executables by default and reads a synthetic analysis
-prompt from a file. The streaming command sends progress to stderr and the
-final answer to stdout. To use an installed, signed-in CLI, add `--live` and
-optionally set `--model` and `--effort` for your account. Real runs use your
-provider's configured account and quota. On a supported version, add
-`--provider-read` to ask the CLI to open the instruction file itself.
-Building the package can fetch setuptools from PyPI. The installed package
-has no Python runtime dependencies.
-
-## Call it from your application
-
-In another project, install from a checkout with `python -m pip install
-/path/to/provider-cli-proxy`, or use your existing GitHub access to install
-from a reviewed commit. Replace `COMMIT_SHA` with the approved revision for
-your deployment.
+Install from a local checkout with `python -m pip install .`, or pin a
+reviewed commit from this private GitHub repository. Replace `COMMIT_SHA`
+with your chosen revision. [Versions and releases](docs/versioning.md)
 
 ```sh
 python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@COMMIT_SHA"
 ```
 
-Run this from a trusted workspace with the provider CLI installed and
-signed in to a subscription account. `Client()` checks PATH and known
-install locations, including Homebrew, WinGet and the native installers.
-On Windows, use Python's default Proactor event loop. For a custom install,
-set `Client(executables={"codex": "/absolute/path/to/codex"})`.
+Install a [supported CLI version](docs/providers.md), sign in through its
+own CLI, and run this Python script from a trusted workspace.
 
 ```python
 import asyncio
@@ -63,59 +62,45 @@ from pathlib import Path
 
 from provider_cli_proxy import Client, Prompt, RunRequest
 
-
-async def main() -> None:
-    result = await Client().run(
-        RunRequest(
-            provider="codex",
-            cwd=Path.cwd(),
-            prompt=Prompt.text("Explain in one sentence what a job queue does."),
-            permissions="prompt_only",
-            deadline_seconds=60,
-        )
-    )
-    if result.status == "succeeded":
-        print(result.text)
-    else:
-        raise SystemExit(result.error.code if result.error else result.status)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+request = RunRequest(
+    provider="codex",
+    cwd=Path.cwd(),
+    prompt=Prompt.text("Explain in one sentence what a job queue does."),
+    deadline_seconds=60,
+)
+result = asyncio.run(Client().run(request))
+if result.error:
+    raise SystemExit(f"{result.error.code}: {result.error.message}")
+print(result.text)
 ```
 
-Set `model` and `effort` to select values supported by the chosen CLI. Use
-`Prompt.from_file(Path("task.md"))` to load a trusted UTF-8 instruction file
-into the initial prompt. The application reads that file under its own OS
-permissions. This works on Windows, macOS and Linux. On a verified
-`workspace_read` combination, you can also ask the provider to open task
-files relative to the selected workspace.
+Use `Prompt.from_file(Path("task.md"))` to load instructions in your app.
+Use `client.start(request)` and `session.events()` to stream the same run.
+On Windows, use a native provider `.exe` and the default Proactor event loop.
 
-For live updates, use `async with client.start(request) as session` and
-iterate `session.events()`. The same session exposes `wait()` and `cancel()`.
-Forward events through your application's existing transport. Codex `exec`
-emits completed answer snapshots. Claude Code can also emit text deltas.
-Use the final result to reconcile the displayed answer and finish the job.
+## Try the example offline
 
-## Provider boundaries
+Run these commands from the repository root after installing the package:
 
-Use a trusted worker host and approved workspaces. `prompt_only` is for
-prompts supplied as text. Install an exact CLI version from the compatibility
-guide. It also lists where an adapter can offer `workspace_read` and which
-restrictions were verified. Unsupported profiles and CLI versions fail before
-inference. Keep authentication with the
-official CLI and use an OS or container boundary where your application
-requires isolation between users. Local CLIs send prompts to their configured
-providers.
+```sh
+python examples/analysis_job/analyze.py run --provider codex
+python examples/analysis_job/analyze.py stream --provider claude
+```
 
-The proxy checks sign-in before sending a prompt. Handle `auth_required`
-by asking the user to sign in in their own CLI. `subscription_required`
-means the active login does not report a supported subscription.
+Both commands use fixtures by default. The output is based on a synthetic
+ticket-count report. The streaming example writes progress to stderr and
+the final answer to stdout. [PowerShell setup and live examples](examples/analysis_job/README.md)
 
-## Docs
+## Documentation
 
-- [Integration guide](docs/integration.md) for analysis, streaming and jobs.
-- [Python session contract](docs/session-contract.md) for types and failures.
-- [Provider compatibility](docs/providers.md) for supported combinations.
-- [Verification](docs/verification.md) for the test and smoke-test workflow.
-- [Build plan](docs/plan.md) for delivery phases and the release gate.
+| Topic | Guide |
+| --- | --- |
+| One-shot analysis, chat and queues | [Integration](docs/integration.md) |
+| Requests, events, results and errors | [Python API](docs/session-contract.md) |
+| CLI installs, sign-in, quotas and permission profiles | [Provider compatibility](docs/providers.md) |
+| Offline tests and opt-in smoke checks | [Verification](docs/verification.md) |
+| Versions and reporting issues | [Versions and issues](docs/versioning.md) |
+
+The CLI uses its locally configured provider account. Provider-side
+`workspace_read` is available on verified macOS combinations. Loading
+files through Python works on all three operating systems.

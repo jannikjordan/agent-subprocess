@@ -1,8 +1,7 @@
 # Python session contract
 
 Import the public types from `provider_cli_proxy`. See the
-[compatibility record](providers.md) for supported runtime features and the
-[plan](plan.md) for session resume, output schemas and live task reports.
+[compatibility record](providers.md) for supported runtime features.
 
 ## Request
 
@@ -47,6 +46,15 @@ workspace and the requested permission profile independently of prompt text.
   Cancellation and deadline handling stop the managed process group on POSIX
   or the Win32 Job Object on Windows, then resolve the same terminal outcome
   for both readers.
+
+## Provider inventory
+
+Use `await client.list_providers(include_usage=False, deadline_seconds=15)` to
+inspect availability without a prompt. The result contains `ProviderInfo`
+entries for both providers, including missing or incompatible CLIs. Inspect
+`auth_status` and `error` to decide what the user should do next. Ask for
+usage explicitly to get `RateLimitWindow` entries where reported. See
+[provider inventory](providers.md#list-providers-and-usage).
 
 ## Events and results
 

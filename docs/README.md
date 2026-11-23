@@ -10,7 +10,7 @@ which features have been checked against the official CLIs.
 | Build or consume the Python API | [Session contract](session-contract.md) |
 | Check model, effort, permissions and event support | [Provider compatibility](providers.md) |
 | Verify library behavior or an app integration | [Verification](verification.md) |
-| Check release phases and acceptance | [Build plan](plan.md) |
+| Pin an upgrade or report an integration problem | [Versions and issues](versioning.md) |
 
 Review the host project's worker, authentication and UI conventions before
 integrating. Use its existing queue, access controls and rendering. Pin a

@@ -112,6 +112,34 @@ changes still affect what the provider accepts when a job starts.
 [Codex account status](https://learn.chatgpt.com/docs/app-server#1-check-auth-state)
 [Claude CLI authentication](https://code.claude.com/docs/en/cli-reference)
 
+## List providers and usage
+
+`await Client().list_providers()` returns one `ProviderInfo` per provider.
+Each entry describes the detected executable, its version, whether the
+version is compatible, sign-in status, and the plan when available.
+
+```python
+async def show_providers(client):
+    for provider in await client.list_providers(include_usage=True):
+        print(provider.provider, provider.version, provider.auth_status)
+        for window in provider.limits:
+            reset = window.resets_at.isoformat() if window.resets_at else None
+            print(window.kind, window.used_percent, reset)
+```
+
+Usage is opt-in. `limits` contains reported session or weekly windows,
+with usage as a percentage and a UTC reset time when supplied. A reported
+zero is a real reading. Use `usage_status` to distinguish a skipped check
+from unavailable quota data. A signed-in account can have unavailable limits.
+
+Codex uses App Server's `account/rateLimits/read`. Claude uses a read-only
+`get_usage` control request when supported. These checks can contact provider
+status services. They start no inference session and expose no account email,
+account ID or raw status response.
+
+[Codex rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt)
+[Claude usage control](https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/CHANGELOG.md#03169)
+
 ## Windows setup
 
 Use the native `codex.exe` or `claude.exe` from the provider. If the CLI was

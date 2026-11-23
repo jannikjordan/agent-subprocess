@@ -76,6 +76,11 @@ before adding them.
   it ready and integrate it after independent review and green required
   checks. Required branch protections apply when configured. Promotion to
   `main`, releases and tags require the owner.
+- After integration, remove the merged work branch locally and on the remote.
+  Confirm its head is reachable from the target and check active worktrees
+  before deleting it. Preserve `dev`, `main` and branches with unmerged work.
+- Update [CHANGELOG.md](CHANGELOG.md) for public changes. Follow
+  [versioning and releases](docs/versioning.md) when preparing a release PR.
 - Any GitHub remote created for this project is private. Use English in
   repository text. Keep rules in one place and update the affected docs
   when behavior changes.
