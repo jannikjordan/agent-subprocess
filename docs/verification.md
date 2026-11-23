@@ -39,6 +39,12 @@ provider credentials. It can run on a `dev` revision through manual dispatch,
 or on the exact pull request head when the `run-windows-tests` label is
 applied. The job uses a private GitHub-hosted runner allocation.
 
+Pull requests targeting `main` automatically run the installed-package and
+example suites on Linux, Windows and macOS. These jobs use fake executables
+and synthetic account responses. Review the three `Release checks` results
+before approving a release PR. Signed-in provider checks run on an
+authorized local host.
+
 ## Consuming project checks
 
 - Run one real request through the application's normal entry point. Check

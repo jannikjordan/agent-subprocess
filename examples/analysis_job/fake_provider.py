@@ -7,6 +7,43 @@ ANSWER = "18 tickets closed. Wednesday had the highest count with 9."
 SESSION = "00000000-0000-4000-8000-000000000001"
 
 
+def account_status(provider: str) -> bool:
+    """Answer the CLI subscription preflight using synthetic data."""
+    if provider == "codex" and sys.argv[2:3] == ["app-server"]:
+        initialize = json.loads(sys.stdin.readline())
+        print(json.dumps({"id": initialize["id"], "result": {}}), flush=True)
+        assert json.loads(sys.stdin.readline())["method"] == "initialized"
+        request = json.loads(sys.stdin.readline())
+        assert request["method"] == "account/read"
+        print(
+            json.dumps(
+                {
+                    "id": request["id"],
+                    "result": {
+                        "account": {"type": "chatgpt", "planType": "pro"},
+                        "requiresOpenaiAuth": True,
+                    },
+                }
+            ),
+            flush=True,
+        )
+        assert not sys.stdin.read()
+        return True
+    if provider == "claude" and sys.argv[-3:] == ["auth", "status", "--json"]:
+        print(
+            json.dumps(
+                {
+                    "loggedIn": True,
+                    "authMethod": "claude.ai",
+                    "apiProvider": "firstParty",
+                    "subscriptionType": "max",
+                }
+            )
+        )
+        return True
+    return False
+
+
 def emit(kind: str, **fields: object) -> None:
     """Write one JSON Lines record to the proxy."""
     print(json.dumps({"type": kind, **fields}), flush=True)
@@ -54,6 +91,8 @@ def main() -> int:
         return 2
     if "--version" in sys.argv:
         print("codex-cli 0.171.0" if provider == "codex" else "2.1.330 (Claude Code)")
+        return 0
+    if account_status(provider):
         return 0
     prompt = sys.stdin.buffer.read().decode("utf-8")
     if "Monday,3" not in prompt or "Wednesday,9" not in prompt:

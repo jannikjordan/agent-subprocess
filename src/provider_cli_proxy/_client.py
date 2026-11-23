@@ -1,13 +1,15 @@
 import asyncio
 import math
 import os
-import shutil
 import sys
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from ._auth import check_subscription
+from ._discovery import executable_candidates
 from ._models import MAX_PROMPT_BYTES, EventKind, Prompt, Provider, RunError, RunEvent
 from ._models import RunRequest, RunResult, RunStatus
 from ._process import run_child
@@ -15,7 +17,6 @@ from ._providers import (
     CLI_VERSIONS,
     Decoder,
     Failure,
-    child_environment,
     command_options,
 )
 from ._providers import recognized_error
@@ -23,20 +24,6 @@ from ._providers import recognized_error
 _BUFFERED_EVENTS = 128
 _MAX_ANSWER_BYTES = 4_194_304
 _Executable = str | Path | tuple[str | Path, ...]
-
-
-def _resolve_executable(provider: Provider) -> str | None:
-    path = child_environment()["PATH"]
-    if os.name == "nt":
-        # Windows executable search can include cwd and command-script shims.
-        for directory in path.split(os.pathsep):
-            if (
-                directory
-                and (candidate := Path(directory) / f"{provider}.exe").is_file()
-            ):
-                return str(candidate)
-        return None
-    return shutil.which(provider, path=path)
 
 
 class Session:
@@ -184,23 +171,13 @@ class Session:
             )
         cwd, content, seconds = self._prepare()
         options = command_options(self._request, cwd)
-        prefix = self._executable
-        if prefix is None:
-            binary = _resolve_executable(self._request.provider)
-            if binary is None:
-                raise Failure(
-                    "cli_missing", "Install the requested official provider CLI."
-                )
-            prefix = (binary,)
-        binary_path = Path(prefix[0]).resolve(strict=True)
-        if os.name == "nt" and binary_path.suffix.lower() != ".exe":
-            raise Failure(
-                "unsupported_setting",
-                "Windows requires a native .exe provider launcher.",
-            )
-        argv = (str(binary_path), *prefix[1:])
         deadline = started_at + seconds
-        await self._check_cli_version(argv, cwd, deadline)
+        with TemporaryDirectory(prefix="provider-cli-check-") as directory:
+            check_cwd = Path(directory).resolve()
+            argv = await self._select_executable(check_cwd, deadline)
+            await check_subscription(
+                self._request.provider, argv, check_cwd, self._stop, deadline
+            )
         returncode, stderr = await run_child(
             [*argv, *options],
             cwd,
@@ -232,6 +209,36 @@ class Session:
             raise Failure(
                 "protocol_error", "The CLI exited without a usable terminal answer."
             )
+
+    async def _select_executable(self, cwd: Path, deadline: float) -> tuple[str, ...]:
+        prefix = self._executable
+        if prefix is None:
+            unsupported = None
+            for binary in executable_candidates(self._request.provider, os.environ):
+                argv = (str(binary),)
+                try:
+                    await self._check_cli_version(argv, cwd, deadline)
+                except OSError:
+                    continue
+                except Failure as failure:
+                    if failure.error.code != "unsupported_setting":
+                        raise
+                    unsupported = failure
+                else:
+                    return argv
+            if unsupported is not None:
+                raise unsupported
+            raise Failure("cli_missing", "Install the requested official provider CLI.")
+
+        binary_path = Path(prefix[0]).resolve(strict=True)
+        if os.name == "nt" and binary_path.suffix.lower() != ".exe":
+            raise Failure(
+                "unsupported_setting",
+                "Windows requires a native .exe provider launcher.",
+            )
+        argv = (str(binary_path), *prefix[1:])
+        await self._check_cli_version(argv, cwd, deadline)
+        return argv
 
     async def _check_cli_version(
         self, argv: tuple[str, ...], cwd: Path, deadline: float

@@ -11,6 +11,7 @@ _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/+-]{0,199}", re.ASCII)
 _NONESSENTIAL_ENV = {
     "DO_NOT_TRACK": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED": "1",
 }
 _ENV_KEYS = {"HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "PATH", "TMPDIR", "USER"}
 _WINDOWS_ENV_KEYS = {
@@ -34,6 +35,9 @@ _CLAUDE_READ_TOOLS = ("Read", "Glob", "Grep")
 
 _CODEX_CONFIG = (
     "approval_policy='never'",
+    "model_provider='openai'",
+    "cli_auth_credentials_store='auto'",
+    "check_for_update_on_startup=false",
     "analytics.enabled=false",
     "feedback.enabled=false",
     "otel.exporter='none'",
@@ -52,6 +56,7 @@ _CODEX_CONFIG = (
     "features.hooks=false",
     "features.memories=false",
     "features.multi_agent=false",
+    "features.remote_control=false",
     "features.shell_snapshot=false",
     "features.ultrafast_mode=false",
     "features.view_image=false",
@@ -106,6 +111,17 @@ def _workspace_has_codex_config(cwd: Path) -> bool:
     )
 
 
+def codex_config_options(cwd: Path, *extra: str) -> list[str]:
+    """Apply the same provider and credential routing to Codex subprocesses."""
+    project_key = json.dumps(str(cwd), ensure_ascii=False)
+    options = [
+        *_CODEX_CONFIG,
+        f"projects={{{project_key}={{trust_level='untrusted'}}}}",
+        *extra,
+    ]
+    return [argument for setting in options for argument in ("-c", setting)]
+
+
 def command_options(request: RunRequest, cwd: Path) -> list[str]:
     for value in (request.model, request.effort):
         if value is not None and (
@@ -127,11 +143,7 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
                 "permission_denied",
                 "Choose a workspace without project Codex configuration.",
             )
-        project_key = json.dumps(str(cwd), ensure_ascii=False)
-        config = [
-            *_CODEX_CONFIG,
-            f"projects={{{project_key}={{trust_level='untrusted'}}}}",
-        ]
+        config = []
         if request.effort:
             config.append(f"model_reasoning_effort={json.dumps(request.effort)}")
         args = [
@@ -157,8 +169,7 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
         else:
             args.extend(["--sandbox", "read-only"])
             config.append("features.shell_tool=false")
-        for entry in config:
-            args.extend(["-c", entry])
+        args.extend(codex_config_options(cwd, *config))
         if request.model:
             args.extend(["--model", request.model])
         return [*args, "-"]

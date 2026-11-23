@@ -70,31 +70,42 @@ def _stop_tree(protocol: _ProcessProtocol, *, force: bool = False) -> bool:
     return True
 
 
-async def _write_prompt(stream: asyncio.StreamWriter, prompt: bytes) -> None:
+async def _write_input(
+    stream: asyncio.StreamWriter, data: bytes, *, close: bool = False
+) -> None:
     try:
-        stream.write(prompt)
+        stream.write(data)
         await stream.drain()
     except (BrokenPipeError, ConnectionResetError):
         pass  # A startup failure may close stdin before reporting its cause.
     finally:
-        stream.close()
+        if close:
+            stream.close()
 
 
 async def _read_stdout(
-    stream: asyncio.StreamReader, on_record: Callable[[bytes], None]
+    stream: asyncio.StreamReader,
+    on_record: Callable[[bytes], bytes | None],
+    replies: asyncio.StreamWriter | None,
 ) -> None:
-    try:
-        while record := await stream.readline():
-            if len(record) > _MAX_RECORD:
-                raise Failure(
-                    "protocol_error", "The CLI sent a record larger than 1 MiB."
-                )
-            if record.strip():
-                on_record(record)
-    except ValueError:
-        raise Failure(
-            "protocol_error", "The CLI sent a record larger than 1 MiB."
-        ) from None
+    while True:
+        try:
+            record = await stream.readline()
+        except ValueError:
+            raise Failure(
+                "protocol_error", "The CLI sent a record larger than 1 MiB."
+            ) from None
+        if not record:
+            return
+        if len(record) > _MAX_RECORD:
+            raise Failure("protocol_error", "The CLI sent a record larger than 1 MiB.")
+        if record.strip():
+            response = on_record(record)
+            if replies is not None and response is not None:
+                if response:
+                    await _write_input(replies, response)
+                else:
+                    replies.close()
 
 
 async def _read_stderr(stream: asyncio.StreamReader) -> str:
@@ -105,7 +116,10 @@ async def _read_stderr(stream: asyncio.StreamReader) -> str:
 
 
 async def _interact(
-    protocol: _ProcessProtocol, prompt: bytes, on_record: Callable[[bytes], None]
+    protocol: _ProcessProtocol,
+    prompt: bytes,
+    on_record: Callable[[bytes], bytes | None],
+    interactive: bool,
 ) -> tuple[int, str]:
     assert (
         protocol.stdin is not None
@@ -113,8 +127,14 @@ async def _interact(
         and protocol.stderr is not None
     )
     tasks = (
-        asyncio.create_task(_write_prompt(protocol.stdin, prompt)),
-        asyncio.create_task(_read_stdout(protocol.stdout, on_record)),
+        asyncio.create_task(
+            _write_input(protocol.stdin, prompt, close=not interactive)
+        ),
+        asyncio.create_task(
+            _read_stdout(
+                protocol.stdout, on_record, protocol.stdin if interactive else None
+            )
+        ),
         asyncio.create_task(_read_stderr(protocol.stderr)),
     )
     pipes = asyncio.gather(*tasks)
@@ -163,12 +183,14 @@ async def run_child(
     command: list[str],
     cwd: Path,
     prompt: bytes,
-    on_record: Callable[[bytes], None],
+    on_record: Callable[[bytes], bytes | None],
     stop: asyncio.Future[None],
     deadline: float,
     on_started: Callable[[], None] | None = None,
+    *,
+    interactive: bool = False,
 ) -> tuple[int, str]:
-    """Run one process in a managed tree and clean up its pipes and descendants."""
+    """Run a managed process. Interactive callbacks return bytes to send or empty bytes for EOF."""
     if stop.done():
         raise Failure("cancelled", "The run was cancelled.")
     loop = asyncio.get_running_loop()
@@ -217,7 +239,9 @@ async def run_child(
             prompt = b"\x01" + prompt
         if on_started is not None:
             on_started()
-        worker = asyncio.create_task(_interact(protocol, prompt, on_record))
+        worker = asyncio.create_task(
+            _interact(protocol, prompt, on_record, interactive)
+        )
         return await _before_stop(worker, stop, deadline)
     finally:
         if protocol is None:

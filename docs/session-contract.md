@@ -21,12 +21,14 @@ workspace and the requested permission profile independently of prompt text.
 
 ## Run and cancellation
 
-- `Client()` resolves the official CLI executables on `PATH`. The optional
+- `Client()` resolves the official CLI using PATH and the known locations in
+  the [provider guide](providers.md#binary-discovery). The optional
   `executables` mapping selects a trusted absolute path or a tuple with the
   absolute executable path followed by fixed launcher arguments. Choose
   executables in deployment configuration. Windows uses native `.exe`
   launchers and the default Proactor event loop. Each run checks the
-  exact supported CLI version before sending the prompt. Use
+  exact supported CLI version and subscription sign-in before sending the
+  prompt. Use
   `await client.run(request)` to get a `RunResult` without a streaming consumer.
 - `async with client.start(request) as session` starts a run. Use
   `session.events()` for one async event iterator, `await session.wait()` for
@@ -69,8 +71,9 @@ an interrupted run and must retain its interrupted status.
 
 Unsuccessful results carry a normalized `error` with `code` and `message`.
 Expected codes include `cli_missing`, `invalid_request`,
-`unsupported_setting`, `permission_denied`, `auth_required`, `quota_exceeded`,
-`provider_error`, `protocol_error`, `timeout` and `cancelled`. Provider
+`unsupported_setting`, `permission_denied`, `auth_required`,
+`subscription_required`, `auth_check_failed`, `quota_exceeded`, `provider_error`,
+`protocol_error`, `timeout` and `cancelled`. Provider
 completion and a usable result are both required for success. Missing or
 malformed terminal output produces a protocol failure when no recognized
 provider failure explains the exit, even if the process exit code is zero.

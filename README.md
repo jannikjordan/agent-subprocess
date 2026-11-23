@@ -51,9 +51,11 @@ your deployment.
 python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@COMMIT_SHA"
 ```
 
-Run this from a trusted workspace with the provider CLI installed and signed in.
-On Windows, use the native provider `.exe` and Python's default Proactor
-event loop.
+Run this from a trusted workspace with the provider CLI installed and
+signed in to a subscription account. `Client()` checks PATH and known
+install locations, including Homebrew, WinGet and the native installers.
+On Windows, use Python's default Proactor event loop. For a custom install,
+set `Client(executables={"codex": "/absolute/path/to/codex"})`.
 
 ```python
 import asyncio
@@ -105,6 +107,10 @@ inference. Keep authentication with the
 official CLI and use an OS or container boundary where your application
 requires isolation between users. Local CLIs send prompts to their configured
 providers.
+
+The proxy checks sign-in before sending a prompt. Handle `auth_required`
+by asking the user to sign in in their own CLI. `subscription_required`
+means the active login does not report a supported subscription.
 
 ## Docs
 

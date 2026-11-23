@@ -89,3 +89,38 @@ filesystem, write and network restrictions have been verified.
 
 [Win32 Job Objects](https://learn.microsoft.com/windows/win32/procthread/job-objects)
 [Python subprocess support](https://docs.python.org/3/library/asyncio-subprocess.html)
+
+## Binary discovery and subscription checks
+
+- Keep explicit trusted launcher overrides first. Otherwise try absolute PATH
+  entries and a bounded list of known install locations for each OS. Cover
+  native and manually installed binaries, Homebrew, npm's native Codex
+  payload on Windows, WinGet links and packages, and known Codex desktop
+  bundle paths. Skip broken links and unsupported versions. Execute native
+  Windows `.exe` files directly. Custom install directories can be added to
+  PATH or passed as an absolute override. An app-server-only binary is a
+  different transport from `codex exec`.
+- After version validation and before transmitting a prompt, use the same
+  binary and allowed environment to verify account type. For Codex, query
+  local App Server over stdio with `initialize` and `account/read` with
+  `refreshToken` false. For Claude, read `auth status --json`. Check paid
+  subscription plan and the native provider account type. Reject missing,
+  API-key, free or unsupported accounts with typed errors. Keep raw status
+  and identity fields internal. The probe can read status and has no login,
+  account mutation or inference operation.
+- Use the existing deadline, cancellation and process-tree logic for the
+  probes. Keep app-server stdin open across the handshake, then close it
+  after the account reply. Launch app-server from a clean temporary workspace
+  and disable nonessential traffic and host integrations. Use matching Codex
+  provider and credential-store settings in the probe and `exec`. Validate
+  the account snapshot before launch. Preserve the existing permission checks.
+- Cover installer layouts with synthetic directory trees. Cover accepted,
+  missing, malformed, API-key and unsupported subscription responses with
+  fake binaries and prove rejected sessions transmit no user prompt. Run the
+  installed package and offline example on macOS, Windows and Linux when a
+  PR targets `main`. Codex reviewers approve changes to `dev`. The owner
+  approves release PRs to `main` after the platform checks pass.
+
+[Codex installation](https://learn.chatgpt.com/docs/cli)
+[Codex App Server account read](https://learn.chatgpt.com/docs/app-server#1-check-auth-state)
+[Claude Code setup](https://code.claude.com/docs/en/setup)

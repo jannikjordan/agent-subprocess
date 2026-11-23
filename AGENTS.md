@@ -61,7 +61,9 @@ before adding them.
 ## Git
 
 - Use `dev` for integration and `main` for owner-controlled promotion and
-  releases. Publish `main` from a tested `dev` revision after owner approval.
+  releases. Open release PRs from tested `dev` revisions. Check the macOS,
+  Windows and Linux workflow results before asking the owner to approve
+  `main`.
 - Branch from current `dev` as `type/slug`. Use one branch and one PR per
   task. Use `type(scope): subject` with a lowercase imperative subject.
   Preserve shared history and run the hooks. Update a shared task branch by

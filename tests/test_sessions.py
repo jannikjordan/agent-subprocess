@@ -39,6 +39,45 @@ emit({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'Read
 CLI_VERSIONS = {"codex": "codex-cli 0.171.0", "claude": "2.1.330 (Claude Code)"}
 WORKSPACE_POLICY = "provider_cli_proxy._providers._WORKSPACE_READ_SUPPORTED"
 PROCESS_FIXTURE = Path(__file__).with_name("_process_fixture.py").resolve()
+CODEX_ACCOUNT = {
+    "account": {"type": "chatgpt", "planType": "prolite"},
+    "requiresOpenaiAuth": True,
+}
+CLAUDE_ACCOUNT = {
+    "loggedIn": True,
+    "authMethod": "claude.ai",
+    "apiProvider": "firstParty",
+    "subscriptionType": "max",
+}
+
+
+def auth_fixture(provider, status):
+    if provider == "codex":
+        return f"""
+if sys.argv[1:2] == ['app-server']:
+    initialize = json.loads(sys.stdin.readline())
+    assert initialize['method'] == 'initialize'
+    assert 'forced_login_method' not in ' '.join(sys.argv)
+    assert os.getenv('CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED') == '1'
+    emit({{'id': initialize['id'], 'result': {{}}}})
+    assert json.loads(sys.stdin.readline()) == {{'method': 'initialized'}}
+    check = json.loads(sys.stdin.readline())
+    assert check['method'] == 'account/read' and check['params'] == {{'refreshToken': False}}
+    result = {status!r}
+    if isinstance(result, str):
+        print(result, flush=True)
+    else:
+        emit({{'id': check['id'], 'result': result}})
+    assert not sys.stdin.read()
+    sys.exit()
+"""
+    return f"""
+if sys.argv[-3:] == ['auth', 'status', '--json']:
+    assert not sys.stdin.read()
+    result = {status!r}
+    print(result if isinstance(result, str) else json.dumps(result, indent=2))
+    sys.exit(int(isinstance(result, dict) and result.get('loggedIn') is False))
+"""
 
 
 class SessionsTest(unittest.IsolatedAsyncioTestCase):
@@ -49,17 +88,19 @@ class SessionsTest(unittest.IsolatedAsyncioTestCase):
         self.workspace = self.root / "workspace.with spaces"
         self.workspace.mkdir()
 
-    def fake(self, body, *, provider="codex", version=None):
+    def fake(self, body, *, provider="codex", version=None, auth=None):
         script = self.root / "fake_cli.py"
         if version is None:
             version = CLI_VERSIONS[provider]
+        if auth is None:
+            auth = CODEX_ACCOUNT if provider == "codex" else CLAUDE_ACCOUNT
         script.write_text(
             "import json, os, signal, subprocess, sys, time\n"
             "from pathlib import Path\n"
             "def emit(event): print(json.dumps(event), flush=True)\n"
             "if sys.argv[1:] == ['--version']:\n"
             f"    print({version!r})\n"
-            "    sys.exit()\n" + body,
+            "    sys.exit()\n" + auth_fixture(provider, auth) + body,
             encoding="utf-8",
         )
         return sys.executable, str(script)
@@ -323,17 +364,110 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
             self.assertEqual([e.kind for e in events], ["finished"])
             self.assertEqual(result.error.code, expected)
 
-    async def test_unset_path_returns_cli_missing(self):
-        with patch.dict(os.environ), patch("os.defpath", str(self.root)):
-            os.environ.pop("PATH", None)
+    async def test_no_discovery_candidate_returns_cli_missing(self):
+        with patch(
+            "provider_cli_proxy._discovery._candidate_paths", return_value=iter(())
+        ):
             _, result = await self.stream(Client(), self.request())
         self.assertEqual(result.error.code, "cli_missing")
 
     async def test_path_with_only_batch_shim_returns_cli_missing(self):
-        (self.root / "codex.cmd").write_text("@exit /b 1\n", encoding="utf-8")
-        with patch.dict(os.environ, {"PATH": str(self.root)}):
+        shim = self.root / "codex.cmd"
+        shim.write_text("@exit /b 1\n", encoding="utf-8")
+        with patch(
+            "provider_cli_proxy._discovery._candidate_paths", return_value=iter((shim,))
+        ):
             _, result = await self.stream(Client(), self.request())
         self.assertEqual(result.error.code, "cli_missing")
+
+    async def test_auto_discovery_skips_unusable_and_unsupported_launchers(self):
+        unusable, unsupported, verified = (
+            self.root / name for name in ("unusable", "unsupported", "verified")
+        )
+        attempted = []
+
+        async def run_fixture(
+            command, cwd, prompt, on_record, stop, deadline, on_started=None
+        ):
+            binary = Path(command[0])
+            attempted.append(binary)
+            if binary == unusable:
+                raise OSError("synthetic launch error")
+            if command[-1] == "--version":
+                on_record(
+                    b"unsupported"
+                    if binary == unsupported
+                    else CLI_VERSIONS["codex"].encode()
+                )
+            else:
+                on_started()
+                on_record(
+                    b'{"type":"item.completed","item":{"type":"agent_message","text":"Ready."}}'
+                )
+                on_record(b'{"type":"turn.completed"}')
+            return 0, ""
+
+        with (
+            patch(
+                "provider_cli_proxy._client.executable_candidates",
+                return_value=iter((unusable, unsupported, verified)),
+            ),
+            patch("provider_cli_proxy._client.run_child", side_effect=run_fixture),
+            patch("provider_cli_proxy._client.check_subscription") as check,
+        ):
+            result = await Client().run(self.request())
+        self.assertEqual(result.text, "Ready.")
+        self.assertEqual(attempted, [unusable, unsupported, verified, verified])
+        self.assertEqual(check.call_args.args[1], (str(verified),))
+
+    async def test_unverified_subscription_never_receives_prompt(self):
+        fixtures = [
+            ("codex", {**CODEX_ACCOUNT, "account": None}, "auth_required"),
+            (
+                "codex",
+                {**CODEX_ACCOUNT, "account": {"type": "apiKey"}},
+                "subscription_required",
+            ),
+            (
+                "codex",
+                {**CODEX_ACCOUNT, "account": {"type": "chatgpt", "planType": "free"}},
+                "subscription_required",
+            ),
+            (
+                "codex",
+                {**CODEX_ACCOUNT, "requiresOpenaiAuth": False},
+                "subscription_required",
+            ),
+            ("codex", "invalid private-status", "auth_check_failed"),
+            ("claude", {"loggedIn": False}, "auth_required"),
+            (
+                "claude",
+                {**CLAUDE_ACCOUNT, "authMethod": "api-key", "apiProvider": "anthropic"},
+                "subscription_required",
+            ),
+            (
+                "claude",
+                {**CLAUDE_ACCOUNT, "subscriptionType": "free"},
+                "subscription_required",
+            ),
+            ("claude", "invalid private-status", "auth_check_failed"),
+        ]
+        for provider, auth, expected in fixtures:
+            with self.subTest(provider=provider, expected=expected):
+                marker = self.root / "inference-started"
+                binary = self.fake(
+                    f"Path({str(marker)!r}).touch()\n",
+                    provider=provider,
+                    auth=auth,
+                )
+                events, result = await self.stream(
+                    Client(executables={provider: binary}), self.request(provider)
+                )
+                self.assertEqual([event.kind for event in events], ["finished"])
+                self.assertEqual(result.status, "failed")
+                self.assertEqual(result.error.code, expected)
+                self.assertNotIn("private-status", str(result.error))
+                self.assertFalse(marker.exists())
 
     async def test_normalizes_provider_failure_without_disclosing_details(self):
         for diagnostic, expected in (
@@ -524,7 +658,7 @@ time.sleep(60)
 
         async def delay_startup(*args, **kwargs):
             transport, protocol = await launch(*args, **kwargs)
-            if args[-1] != "--version":
+            if "exec" in args:
                 launched.set_result(transport)
                 await release.wait()
             return transport, protocol

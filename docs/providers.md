@@ -73,6 +73,45 @@ Managed configuration can take precedence over CLI options. For separate
 users or untrusted workloads, apply an independent OS or container boundary
 and validate it before sharing the worker.
 
+## Binary discovery
+
+The default client searches absolute PATH entries first, then known
+locations for native installers and package managers. It uses the first
+compatible binary. Set an absolute `executables` override to select a specific
+installation.
+
+| OS | Known layouts |
+| --- | --- |
+| macOS | Native user installs, Apple Silicon and Intel Homebrew, standard npm prefixes, common binary directories, and known Codex desktop application bundles |
+| Linux | Native user installs, Linuxbrew, standard npm prefixes and standard system and user binary locations |
+| Windows | Native installer locations, WinGet links and recognized packages, and native payloads under standard npm prefixes |
+
+`codex app-server` is a command on the full Codex CLI. The proxy uses it to
+read account status and uses `codex exec` for inference. An installation
+providing a standalone App Server component needs the full CLI for this API.
+
+[Codex installation](https://learn.chatgpt.com/docs/cli)
+[Claude Code installation](https://code.claude.com/docs/en/setup)
+
+## Subscription sign-in
+
+The proxy checks the selected CLI account before sending prompt text. Codex
+uses a one-shot App Server `account/read` probe. Claude Code uses
+`auth status --json`. The check reads the authenticated account and its
+plan, and keeps returned identities and diagnostics out of results.
+
+| Error | What the application should show |
+| --- | --- |
+| `auth_required` | Sign in through `codex login` or `claude auth login` on this worker. |
+| `subscription_required` | Select an account with a supported subscription in the CLI. An API key or free account is insufficient. |
+| `auth_check_failed` | The CLI returned an unreadable account status. Check the installed binary and try again. |
+
+The check is a snapshot. Quota, workspace policy and concurrent sign-in
+changes still affect what the provider accepts when a job starts.
+
+[Codex account status](https://learn.chatgpt.com/docs/app-server#1-check-auth-state)
+[Claude CLI authentication](https://code.claude.com/docs/en/cli-reference)
+
 ## Windows setup
 
 Use the native `codex.exe` or `claude.exe` from the provider. If the CLI was
