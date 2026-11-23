@@ -62,6 +62,7 @@ class InventoryTest(unittest.IsolatedAsyncioTestCase):
         path = self.root / f"{provider}.py"
         usage_marker = self.root / f"{provider}-usage"
         account_marker = self.root / f"{provider}-account"
+        exit_marker = self.root / f"{provider}-control-eof"
         path.write_text(
             f"""
 import json
@@ -94,6 +95,7 @@ elif sys.argv[1:2] == ['app-server']:
         else:
             emit({{'id': request['id'], 'result': limits}})
         assert not sys.stdin.read()
+    Path({str(exit_marker)!r}).touch()
 elif sys.argv[-3:] == ['auth', 'status', '--json']:
     Path({str(account_marker)!r}).touch()
     assert not sys.stdin.read()
@@ -231,3 +233,4 @@ else:
         )
         for provider in ("codex", "claude"):
             self.assertFalse((self.root / f"{provider}-usage").exists())
+        self.assertTrue((self.root / "codex-control-eof").exists())

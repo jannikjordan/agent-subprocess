@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
@@ -268,6 +269,35 @@ class _CodexAccountRead:
         return b""
 
 
+async def _run_control_probe(
+    argv: list[str],
+    cwd: Path,
+    initial: bytes,
+    handle: Callable[[bytes], bytes | None],
+    stop: asyncio.Future[None],
+    deadline: float,
+) -> int:
+    rejection: Failure | None = None
+
+    def reply(record: bytes) -> bytes | None:
+        nonlocal rejection
+        if rejection is not None:
+            return None
+        try:
+            return handle(record)
+        except Failure as error:
+            # Closing stdin lets the child release its cwd before the probe directory is removed.
+            rejection = error
+            return b""
+
+    code, _ = await run_child(
+        argv, cwd, initial, reply, stop, deadline, interactive=True
+    )
+    if rejection is not None:
+        raise rejection
+    return code
+
+
 async def check_subscription(
     provider: Provider,
     argv: tuple[str, ...],
@@ -288,14 +318,13 @@ async def check_subscription(
                 f"log_dir={json.dumps(str(cwd), ensure_ascii=False)}",
             )
             try:
-                code, _ = await run_child(
+                code = await _run_control_probe(
                     [*argv, "app-server", "--listen", "stdio://", *config],
                     cwd,
                     account.initial,
                     account.handle,
                     stop,
                     deadline,
-                    interactive=True,
                 )
             except (Failure, OSError) as failure:
                 if isinstance(failure, Failure) and failure.error.code == "cancelled":
@@ -345,14 +374,13 @@ async def check_subscription(
                 options = claude_command_options(
                     "prompt_only", "haiku", "low", input_format="stream-json"
                 )
-                code, _ = await run_child(
+                code = await _run_control_probe(
                     [*argv, *options],
                     cwd,
                     probe.initial,
                     probe.handle,
                     stop,
                     deadline,
-                    interactive=True,
                 )
             except (Failure, OSError) as failure:
                 if isinstance(failure, Failure) and failure.error.code == "cancelled":
