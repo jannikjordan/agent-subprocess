@@ -38,6 +38,7 @@ and reviews.
    check official docs and installed CLI help, and record the tested versions.
    Verify relevant failure cases alongside the success path. Report any
    unrun live checks and keep credentials and transcripts out of Git.
+   Use only Haiku for live Claude Code tests. Select it explicitly.
 3. Get independent diff review before integration. Record the verdict and
    reviewed revision on the PR, or in the task handoff for local work. Fix
    blocking findings and have the Reviewer verify the final revision. Run

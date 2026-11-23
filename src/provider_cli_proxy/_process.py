@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import signal
+import sys
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from ._providers import Failure, child_environment
+
+if TYPE_CHECKING:
+    from ._windows import WindowsJob
 
 _T = TypeVar("_T")
 _MAX_RECORD = 1_048_576
@@ -19,6 +25,7 @@ class _ProcessProtocol(asyncio.subprocess.SubprocessStreamProtocol):
         loop = asyncio.get_running_loop()
         super().__init__(limit=_MAX_RECORD, loop=loop)
         self.exited: asyncio.Future[int] = loop.create_future()
+        self.job: WindowsJob | None = None
 
     def connection_made(self, transport: asyncio.SubprocessTransport) -> None:
         super().connection_made(transport)
@@ -45,9 +52,19 @@ async def _before_stop(
     raise Failure("timeout", "The run exceeded its deadline.")
 
 
-def _signal_group(transport: asyncio.SubprocessTransport, signum: int) -> bool:
+def _stop_tree(protocol: _ProcessProtocol, *, force: bool = False) -> bool:
+    if os.name == "nt":
+        if protocol.job is not None:
+            protocol.job.close()
+        elif not protocol.exited.done():
+            # An unassigned bootstrap never received permission to launch.
+            with suppress(ProcessLookupError):
+                protocol.process.kill()
+        return False
     try:
-        os.killpg(transport.get_pid(), signum)
+        os.killpg(
+            protocol.process.get_pid(), signal.SIGKILL if force else signal.SIGTERM
+        )
     except ProcessLookupError:
         return False
     return True
@@ -107,7 +124,7 @@ async def _interact(
         )
         if pipes not in done:
             # A child can hold a stream open after the CLI process exits.
-            if not await _finish_pipes(protocol.process, pipes):
+            if not await _finish_pipes(protocol, pipes):
                 raise Failure(
                     "protocol_error", "The CLI left an output stream open after exit."
                 )
@@ -119,11 +136,9 @@ async def _interact(
         await asyncio.gather(pipes, *tasks, return_exceptions=True)
 
 
-async def _finish_pipes(
-    transport: asyncio.SubprocessTransport, pipes: asyncio.Future
-) -> bool:
-    for signum in (signal.SIGTERM, signal.SIGKILL):
-        _signal_group(transport, signum)
+async def _finish_pipes(protocol: _ProcessProtocol, pipes: asyncio.Future) -> bool:
+    for force in (False, True):
+        _stop_tree(protocol, force=force)
         done, _ = await asyncio.wait((pipes,), timeout=_GRACE)
         if done:
             return True
@@ -132,9 +147,9 @@ async def _finish_pipes(
 
 async def _cleanup(protocol: _ProcessProtocol, worker: asyncio.Task | None) -> None:
     try:
-        if _signal_group(protocol.process, signal.SIGTERM):
+        if _stop_tree(protocol):
             await asyncio.sleep(_GRACE)
-            _signal_group(protocol.process, signal.SIGKILL)
+            _stop_tree(protocol, force=True)
         await asyncio.wait((protocol.exited,), timeout=_GRACE)
     finally:
         protocol.process.close()
@@ -153,19 +168,33 @@ async def run_child(
     deadline: float,
     on_started: Callable[[], None] | None = None,
 ) -> tuple[int, str]:
-    """Run one process in a new session and clean up its pipes and group."""
+    """Run one process in a managed tree and clean up its pipes and descendants."""
     if stop.done():
         raise Failure("cancelled", "The run was cancelled.")
     loop = asyncio.get_running_loop()
     if loop.time() >= deadline:
         raise Failure("timeout", "The run exceeded its deadline.")
+    spawn_options = {"start_new_session": True}
+    if os.name == "nt":
+        if not isinstance(loop, asyncio.ProactorEventLoop):
+            raise Failure(
+                "unsupported_setting", "Windows requires a Proactor event loop."
+            )
+        if not Path(sys.executable).is_absolute():
+            raise Failure(
+                "unsupported_setting", "Windows requires an absolute Python executable."
+            )
+        from ._windows import WindowsJob, bootstrap_args
+
+        command, creationflags = bootstrap_args(command)
+        spawn_options = {"creationflags": creationflags}
     spawn = asyncio.create_task(
         loop.subprocess_exec(
             _ProcessProtocol,
             *command,
             cwd=cwd,
             env=child_environment(),
-            start_new_session=True,
+            **spawn_options,
         )
     )
     protocol = None
@@ -174,6 +203,16 @@ async def run_child(
         _, protocol = await _before_stop(spawn, stop, deadline)
         if stop.done():
             raise Failure("cancelled", "The run was cancelled.")
+        if os.name == "nt":
+            try:
+                protocol.job = WindowsJob(protocol.process.get_pid())
+            except OSError:
+                raise Failure(
+                    "provider_error", "Windows could not contain the provider process."
+                ) from None
+            if loop.time() >= deadline:
+                raise Failure("timeout", "The run exceeded its deadline.")
+            prompt = b"\x01" + prompt
         if on_started is not None:
             on_started()
         worker = asyncio.create_task(_interact(protocol, prompt, on_record))

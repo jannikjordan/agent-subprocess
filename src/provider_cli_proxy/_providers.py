@@ -13,6 +13,19 @@ _NONESSENTIAL_ENV = {
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 }
 _ENV_KEYS = {"HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "PATH", "TMPDIR", "USER"}
+_WINDOWS_ENV_KEYS = {
+    "APPDATA",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "LOCALAPPDATA",
+    "PROGRAMDATA",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "WINDIR",
+}
+_WORKSPACE_READ_SUPPORTED = sys.platform == "darwin"
 CLI_VERSIONS = {
     "codex": b"codex-cli 0.171.0",
     "claude": b"2.1.330 (Claude Code)",
@@ -71,17 +84,16 @@ class Failure(Exception):
 
 
 def child_environment() -> dict[str, str]:
+    keys = _ENV_KEYS | _WINDOWS_ENV_KEYS if os.name == "nt" else _ENV_KEYS
     env = {
-        key: val for key, val in os.environ.items() if key in _ENV_KEYS
+        key: val for key, val in os.environ.items() if key in keys
     } | _NONESSENTIAL_ENV
-    env["PATH"] = (
-        os.pathsep.join(
-            entry
-            for entry in env.get("PATH", os.defpath).split(os.pathsep)
-            if os.path.isabs(entry)
-        )
-        or os.defpath
+    path = os.pathsep.join(
+        entry
+        for entry in env.get("PATH", "").split(os.pathsep)
+        if Path(entry).is_absolute()
     )
+    env["PATH"] = path or ("" if os.name == "nt" else os.defpath)
     return env
 
 
@@ -104,7 +116,7 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
             )
     if request.permissions not in ("prompt_only", "workspace_read"):
         raise Failure("unsupported_setting", "Unknown permission profile.")
-    if request.permissions == "workspace_read" and sys.platform != "darwin":
+    if request.permissions == "workspace_read" and not _WORKSPACE_READ_SUPPORTED:
         raise Failure(
             "unsupported_setting", "Workspace-only reads are supported on macOS."
         )

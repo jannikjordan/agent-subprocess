@@ -1,5 +1,6 @@
 import asyncio
 import math
+import os
 import shutil
 import sys
 import uuid
@@ -21,15 +22,30 @@ from ._providers import recognized_error
 
 _BUFFERED_EVENTS = 128
 _MAX_ANSWER_BYTES = 4_194_304
+_Executable = str | Path | tuple[str | Path, ...]
+
+
+def _resolve_executable(provider: Provider) -> str | None:
+    path = child_environment()["PATH"]
+    if os.name == "nt":
+        # Windows executable search can include cwd and command-script shims.
+        for directory in path.split(os.pathsep):
+            if (
+                directory
+                and (candidate := Path(directory) / f"{provider}.exe").is_file()
+            ):
+                return str(candidate)
+        return None
+    return shutil.which(provider, path=path)
 
 
 class Session:
     """A live run handle with one event iterator and one shared result."""
 
-    def __init__(self, request: RunRequest, executable: str | None):
+    def __init__(self, request: RunRequest, executable: str | tuple[str, ...] | None):
         self.run_id = uuid.uuid4().hex
         self._request = request
-        self._executable = executable
+        self._executable = (executable,) if isinstance(executable, str) else executable
         self._loop = asyncio.get_running_loop()
         self._stop: asyncio.Future[None] = self._loop.create_future()
         self._queue: asyncio.Queue[RunEvent] = asyncio.Queue(
@@ -161,22 +177,32 @@ class Session:
         )
 
     async def _execute(self, decoder: Decoder, started_at: float) -> None:
-        if sys.platform not in ("darwin", "linux"):
+        if sys.platform not in ("darwin", "linux", "win32"):
             raise Failure(
-                "unsupported_setting", "Provider processes require macOS or Linux."
+                "unsupported_setting",
+                "Provider processes require macOS, Windows or Linux.",
             )
         cwd, content, seconds = self._prepare()
         options = command_options(self._request, cwd)
-        binary = self._executable or shutil.which(
-            self._request.provider, path=child_environment()["PATH"]
-        )
-        if not binary:
-            raise Failure("cli_missing", "Install the requested official provider CLI.")
-        binary = str(Path(binary).resolve(strict=True))
+        prefix = self._executable
+        if prefix is None:
+            binary = _resolve_executable(self._request.provider)
+            if binary is None:
+                raise Failure(
+                    "cli_missing", "Install the requested official provider CLI."
+                )
+            prefix = (binary,)
+        binary_path = Path(prefix[0]).resolve(strict=True)
+        if os.name == "nt" and binary_path.suffix.lower() != ".exe":
+            raise Failure(
+                "unsupported_setting",
+                "Windows requires a native .exe provider launcher.",
+            )
+        argv = (str(binary_path), *prefix[1:])
         deadline = started_at + seconds
-        await self._check_cli_version(binary, cwd, deadline)
+        await self._check_cli_version(argv, cwd, deadline)
         returncode, stderr = await run_child(
-            [binary, *options],
+            [*argv, *options],
             cwd,
             content,
             lambda record: self._record(decoder, record),
@@ -207,7 +233,9 @@ class Session:
                 "protocol_error", "The CLI exited without a usable terminal answer."
             )
 
-    async def _check_cli_version(self, binary: str, cwd: Path, deadline: float) -> None:
+    async def _check_cli_version(
+        self, argv: tuple[str, ...], cwd: Path, deadline: float
+    ) -> None:
         expected = CLI_VERSIONS[self._request.provider]
         matched = False
 
@@ -224,7 +252,7 @@ class Session:
             matched = True
 
         code, _ = await run_child(
-            [binary, "--version"], cwd, b"", check, self._stop, deadline
+            [*argv, "--version"], cwd, b"", check, self._stop, deadline
         )
         if code != 0 or not matched:
             raise unsupported_version()
@@ -267,15 +295,22 @@ class Session:
 class Client:
     """Launch local official provider CLIs with a shared session API."""
 
-    def __init__(self, *, executables: Mapping[Provider, str | Path] | None = None):
+    def __init__(self, *, executables: Mapping[Provider, _Executable] | None = None):
         self._executables = {}
         for provider, executable in (executables or {}).items():
-            path = Path(executable)
-            if provider not in ("codex", "claude") or not path.is_absolute():
-                raise ValueError(
-                    "Use an absolute trusted executable path for codex or claude."
+            argv = executable if isinstance(executable, tuple) else (executable,)
+            if (
+                provider not in ("codex", "claude")
+                or not argv
+                or any(
+                    not isinstance(arg, (str, Path)) or "\0" in str(arg) for arg in argv
                 )
-            self._executables[provider] = str(path)
+                or not Path(argv[0]).is_absolute()
+            ):
+                raise ValueError(
+                    "Use a trusted codex or claude command with an absolute executable path."
+                )
+            self._executables[provider] = tuple(map(str, argv))
 
     @asynccontextmanager
     async def start(self, request: RunRequest) -> AsyncIterator[Session]:

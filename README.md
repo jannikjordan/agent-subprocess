@@ -11,7 +11,8 @@ or use the answer.
 
 ## Try it without a provider account
 
-Use Python 3.11 or newer on macOS or Linux. From this repository:
+Use Python 3.11 or newer on macOS, Windows or Linux. On macOS or Linux,
+run these commands from the repository root:
 
 ```sh
 python3 -m venv .venv
@@ -19,6 +20,15 @@ python3 -m venv .venv
 python -m pip install .
 python examples/analysis_job/analyze.py run --provider codex
 python examples/analysis_job/analyze.py stream --provider claude
+```
+
+On Windows, use PowerShell:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\python.exe examples/analysis_job/analyze.py run --provider codex
+.\.venv\Scripts\python.exe examples/analysis_job/analyze.py stream --provider claude
 ```
 
 The example uses fake executables by default and reads a synthetic analysis
@@ -42,6 +52,8 @@ python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.gi
 ```
 
 Run this from a trusted workspace with the provider CLI installed and signed in.
+On Windows, use the native provider `.exe` and Python's default Proactor
+event loop.
 
 ```python
 import asyncio
@@ -73,8 +85,9 @@ if __name__ == "__main__":
 Set `model` and `effort` to select values supported by the chosen CLI. Use
 `Prompt.from_file(Path("task.md"))` to load a trusted UTF-8 instruction file
 into the initial prompt. The application reads that file under its own OS
-permissions. With a verified workspace-read profile, you can instead ask
-the provider to open task files relative to the selected workspace.
+permissions. This works on Windows, macOS and Linux. On a verified
+`workspace_read` combination, you can also ask the provider to open task
+files relative to the selected workspace.
 
 For live updates, use `async with client.start(request) as session` and
 iterate `session.events()`. The same session exposes `wait()` and `cancel()`.

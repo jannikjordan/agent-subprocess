@@ -6,7 +6,7 @@ check the public API without credentials or provider traffic.
 
 ## Install and run
 
-From the repository root, install the package in an isolated environment.
+On macOS and Linux, run these commands from the repository root.
 
 ```sh
 python3 -m venv .venv
@@ -19,6 +19,15 @@ Run either provider fixture in either mode.
 ```sh
 python examples/analysis_job/analyze.py run --provider codex
 python examples/analysis_job/analyze.py stream --provider claude
+```
+
+In Windows PowerShell, use the virtual environment's Python directly.
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\python.exe examples/analysis_job/analyze.py run --provider codex
+.\.venv\Scripts\python.exe examples/analysis_job/analyze.py stream --provider claude
 ```
 
 Both commands print `18 tickets closed. Wednesday had the highest count
@@ -37,11 +46,11 @@ python -m unittest discover -s examples/analysis_job
 
 With the official CLI installed and signed in on a trusted host, add
 `--live` to send the prompt to that provider under its existing account.
-Use `--model` and `--effort` to select settings for your account.
+Use Haiku for live Claude smoke tests.
 
 ```sh
 python examples/analysis_job/analyze.py stream --provider codex --live
-python examples/analysis_job/analyze.py run --provider claude --live
+python examples/analysis_job/analyze.py run --provider claude --live --model haiku --effort low
 ```
 
 Use `--prompt-file` to send a different trusted file in live mode. Python
@@ -54,7 +63,7 @@ file under `--cwd`. A relative `--prompt-file` in this mode is resolved from
 that working directory.
 
 ```sh
-python examples/analysis_job/analyze.py stream --provider claude --live --provider-read
+python examples/analysis_job/analyze.py stream --provider claude --live --provider-read --model haiku --effort low
 ```
 
 See the [session contract](../../docs/session-contract.md) and

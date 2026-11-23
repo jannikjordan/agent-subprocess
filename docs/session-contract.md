@@ -22,8 +22,10 @@ workspace and the requested permission profile independently of prompt text.
 ## Run and cancellation
 
 - `Client()` resolves the official CLI executables on `PATH`. The optional
-  `executables` mapping selects trusted absolute paths for testing or worker
-  setup. Choose executables in deployment configuration. Each run checks the
+  `executables` mapping selects a trusted absolute path or a tuple with the
+  absolute executable path followed by fixed launcher arguments. Choose
+  executables in deployment configuration. Windows uses native `.exe`
+  launchers and the default Proactor event loop. Each run checks the
   exact supported CLI version before sending the prompt. Use
   `await client.run(request)` to get a `RunResult` without a streaming consumer.
 - `async with client.start(request) as session` starts a run. Use
@@ -40,8 +42,9 @@ workspace and the requested permission profile independently of prompt text.
   events, the remaining live updates are dropped and `stream_truncated`
   precedes `finished`. The final result remains authoritative. The runner
   caps native records at 1 MiB and total emitted answer text at 4 MiB.
-  Cancellation and deadline handling stop the managed process group and
-  resolve the same terminal outcome for both readers.
+  Cancellation and deadline handling stop the managed process group on POSIX
+  or the Win32 Job Object on Windows, then resolve the same terminal outcome
+  for both readers.
 
 ## Events and results
 
@@ -51,7 +54,7 @@ one `finished` event carrying a `RunResult`, including when startup fails.
 
 | Event | Meaning |
 | --- | --- |
-| `started` | The provider process started. Native session metadata can arrive later. |
+| `started` | The managed launch is active. Native session metadata can arrive later. |
 | `activity` | Available user-visible work status from the runtime, such as a tool starting or completing. |
 | `answer_delta` | Append this text to the current response. Produced by a transport that exposes text deltas. |
 | `answer_snapshot` | Replace the current response with this complete text. Used for completed messages or to reconcile the displayed answer. |

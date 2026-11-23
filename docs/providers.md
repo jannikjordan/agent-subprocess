@@ -12,9 +12,10 @@ Both CLIs used their existing signed-in accounts and synthetic inputs.
 Both permission profiles require the exact CLI versions in the table.
 The wrapper checks the version before sending the prompt so a CLI update
 cannot silently change the permission flags. `workspace_read` is available
-on macOS. Linux supports `prompt_only` and its test coverage uses fixture
-CLIs. Live Linux inference and native session resume have no verification
-record yet.
+on macOS. The `prompt_only` process runner also targets Windows and Linux.
+Use `Prompt.from_file(...)` on either OS to send the contents of a trusted
+task file. Local inference was exercised on macOS. Separate fixture runs
+check the OS-specific startup, pipes and process cleanup.
 
 ## Codex
 
@@ -71,6 +72,19 @@ dedicated trusted host with trusted system and administrator configuration.
 Managed configuration can take precedence over CLI options. For separate
 users or untrusted workloads, apply an independent OS or container boundary
 and validate it before sharing the worker.
+
+## Windows setup
+
+Use the native `codex.exe` or `claude.exe` from the provider. If the CLI was
+installed using a command shim, point the client at the native executable
+with the `executables` setting. The process runner uses Win32 Job Objects
+for cancellation and cleanup, and requires the default Python Proactor
+event loop. Hosted or embedded applications using a Selector event loop
+can run the proxy in a dedicated worker process.
+
+[Codex release binaries](https://github.com/openai/codex/releases/tag/rust-v0.171.0)
+[Claude Code setup on Windows](https://code.claude.com/docs/en/setup#setup-on-windows)
+[Python subprocess support](https://docs.python.org/3/library/asyncio-subprocess.html)
 
 The Corduno reference app has separate runtime evidence for older versions.
 [Corduno provider evidence](https://github.com/getcorduno/documentation/blob/59f041cd0061105c63e58772fa54e1b0d82bbb71/evidence/providers.md)

@@ -8,7 +8,8 @@ to see the proxy in a worker or request handler without using an account.
 
 1. Use a supported host with the official provider CLI installed and
    authorized for the intended workload. Check the [compatibility record](providers.md)
-   for that binary version, OS and permission profile.
+   for that binary version, OS and permission profile. On Windows, install
+   the native executable and run with Python's default Proactor event loop.
 2. Resolve the provider, model, effort, deadline and workspace from trusted
    application settings. If the app lets users select a model or provider,
    validate the selection against the app's allowlist. Resolve workspace

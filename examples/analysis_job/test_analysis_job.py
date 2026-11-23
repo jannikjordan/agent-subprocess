@@ -56,7 +56,7 @@ class AnalysisJobTest(unittest.TestCase):
         self.assertIn("--provider-read requires --live", result.stderr)
 
     def test_provider_side_read_keeps_the_file_inside_the_workspace(self) -> None:
-        """Use a relative path and reject symlinks that leave the workspace."""
+        """Use a relative path and reject paths that leave the workspace."""
         with TemporaryDirectory() as directory:
             root = Path(directory)
             workspace = root / "workspace"
@@ -72,7 +72,23 @@ class AnalysisJobTest(unittest.TestCase):
 
             outside = root / "outside.md"
             outside.write_text("Outside the job workspace.", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                workspace_prompt(workspace, Path("..") / outside.name)
+
+    def test_provider_side_read_rejects_symlink_escape(self) -> None:
+        """Resolve a symlink before accepting the prompt path."""
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            outside = root / "outside.md"
+            outside.write_text("Outside the job workspace.", encoding="utf-8")
             link = workspace / "linked.md"
-            link.symlink_to(outside)
+            try:
+                link.symlink_to(outside)
+            except OSError as error:
+                if getattr(error, "winerror", None) == 1314:
+                    self.skipTest("Windows host cannot create symlinks.")
+                raise
             with self.assertRaises(ValueError):
                 workspace_prompt(workspace, Path(link.name))
