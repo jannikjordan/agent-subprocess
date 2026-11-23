@@ -1,0 +1,38 @@
+name: Publish source release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: source-release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.created == false && github.event.deleted == false && github.event.forced == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      DO_NOT_TRACK: '1'
+      GH_PROMPT_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - name: Select version and release notes
+        id: metadata
+        run: python scripts/release.py prepare --plan "$RUNNER_TEMP/release.json" --output "$GITHUB_OUTPUT"
+      - name: Publish source release
+        if: steps.metadata.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/release.py publish --plan "$RUNNER_TEMP/release.json"

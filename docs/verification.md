@@ -45,6 +45,10 @@ and synthetic account responses. Review the three `Release checks` results
 before approving a release PR. Signed-in provider checks run on an
 authorized local host.
 
+Release automation tests use synthetic GitHub responses. After an approved
+version bump reaches `main`, check the Publish release run and verify the
+tag points to the merged commit and the notes match `CHANGELOG.md`.
+
 ## Consuming project checks
 
 - Run one real request through the application's normal entry point. Check

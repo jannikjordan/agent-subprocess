@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Publish a GitHub source tag and release notes automatically after an
+  approved version bump reaches `main`.
+- This first tagged release includes cross-platform CLI discovery,
+  subscription checks, provider inventory and the offline example.
+
 ## 0.2.0
 
 - Discover supported Codex and Claude Code installations through PATH and
