@@ -11,8 +11,22 @@ _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/+-]{0,199}", re.ASCII)
 _NONESSENTIAL_ENV = {
     "DO_NOT_TRACK": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED": "1",
 }
 _ENV_KEYS = {"HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "PATH", "TMPDIR", "USER"}
+_WINDOWS_ENV_KEYS = {
+    "APPDATA",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "LOCALAPPDATA",
+    "PROGRAMDATA",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "WINDIR",
+}
+_WORKSPACE_READ_SUPPORTED = sys.platform == "darwin"
 CLI_VERSIONS = {
     "codex": b"codex-cli 0.171.0",
     "claude": b"2.1.330 (Claude Code)",
@@ -21,6 +35,9 @@ _CLAUDE_READ_TOOLS = ("Read", "Glob", "Grep")
 
 _CODEX_CONFIG = (
     "approval_policy='never'",
+    "model_provider='openai'",
+    "cli_auth_credentials_store='auto'",
+    "check_for_update_on_startup=false",
     "analytics.enabled=false",
     "feedback.enabled=false",
     "otel.exporter='none'",
@@ -39,6 +56,7 @@ _CODEX_CONFIG = (
     "features.hooks=false",
     "features.memories=false",
     "features.multi_agent=false",
+    "features.remote_control=false",
     "features.shell_snapshot=false",
     "features.ultrafast_mode=false",
     "features.view_image=false",
@@ -71,17 +89,16 @@ class Failure(Exception):
 
 
 def child_environment() -> dict[str, str]:
+    keys = _ENV_KEYS | _WINDOWS_ENV_KEYS if os.name == "nt" else _ENV_KEYS
     env = {
-        key: val for key, val in os.environ.items() if key in _ENV_KEYS
+        key: val for key, val in os.environ.items() if key in keys
     } | _NONESSENTIAL_ENV
-    env["PATH"] = (
-        os.pathsep.join(
-            entry
-            for entry in env.get("PATH", os.defpath).split(os.pathsep)
-            if os.path.isabs(entry)
-        )
-        or os.defpath
+    path = os.pathsep.join(
+        entry
+        for entry in env.get("PATH", "").split(os.pathsep)
+        if Path(entry).is_absolute()
     )
+    env["PATH"] = path or ("" if os.name == "nt" else os.defpath)
     return env
 
 
@@ -94,6 +111,60 @@ def _workspace_has_codex_config(cwd: Path) -> bool:
     )
 
 
+def codex_config_options(cwd: Path, *extra: str) -> list[str]:
+    """Apply the same provider and credential routing to Codex subprocesses."""
+    project_key = json.dumps(str(cwd), ensure_ascii=False)
+    options = [
+        *_CODEX_CONFIG,
+        f"projects={{{project_key}={{trust_level='untrusted'}}}}",
+        *extra,
+    ]
+    return [argument for setting in options for argument in ("-c", setting)]
+
+
+def claude_command_options(
+    permissions: Permission,
+    model: str | None,
+    effort: str | None,
+    *,
+    input_format: str = "text",
+) -> list[str]:
+    """Build a restricted local Claude process for a prompt or control messages."""
+    args = [
+        "--print",
+        "--input-format",
+        input_format,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--include-partial-messages",
+        "--no-session-persistence",
+        "--safe-mode",
+        "--restricted",
+        "--no-chrome",
+        "--disable-slash-commands",
+        "--strict-mcp-config",
+        "--mcp-config",
+        '{"mcpServers":{}}',
+        "--settings",
+        '{"disableAllHooks":true,"disableClaudeAiConnectors":true,"fastMode":false}',
+        "--permission-prompts",
+        "none",
+        "--permission-mode",
+        "dontAsk",
+    ]
+    if permissions == "workspace_read":
+        tools = ",".join(_CLAUDE_READ_TOOLS)
+        args.extend(["--tools", tools, "--allowedTools", tools])
+    else:
+        args.extend(["--tools", ""])
+    if model:
+        args.extend(["--model", model])
+    if effort:
+        args.extend(["--effort", effort])
+    return args
+
+
 def command_options(request: RunRequest, cwd: Path) -> list[str]:
     for value in (request.model, request.effort):
         if value is not None and (
@@ -104,7 +175,7 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
             )
     if request.permissions not in ("prompt_only", "workspace_read"):
         raise Failure("unsupported_setting", "Unknown permission profile.")
-    if request.permissions == "workspace_read" and sys.platform != "darwin":
+    if request.permissions == "workspace_read" and not _WORKSPACE_READ_SUPPORTED:
         raise Failure(
             "unsupported_setting", "Workspace-only reads are supported on macOS."
         )
@@ -115,11 +186,7 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
                 "permission_denied",
                 "Choose a workspace without project Codex configuration.",
             )
-        project_key = json.dumps(str(cwd), ensure_ascii=False)
-        config = [
-            *_CODEX_CONFIG,
-            f"projects={{{project_key}={{trust_level='untrusted'}}}}",
-        ]
+        config = []
         if request.effort:
             config.append(f"model_reasoning_effort={json.dumps(request.effort)}")
         args = [
@@ -145,46 +212,15 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
         else:
             args.extend(["--sandbox", "read-only"])
             config.append("features.shell_tool=false")
-        for entry in config:
-            args.extend(["-c", entry])
+        args.extend(codex_config_options(cwd, *config))
         if request.model:
             args.extend(["--model", request.model])
         return [*args, "-"]
 
     if request.provider == "claude":
-        args = [
-            "--print",
-            "--input-format",
-            "text",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--include-partial-messages",
-            "--no-session-persistence",
-            "--safe-mode",
-            "--restricted",
-            "--no-chrome",
-            "--disable-slash-commands",
-            "--strict-mcp-config",
-            "--mcp-config",
-            '{"mcpServers":{}}',
-            "--settings",
-            '{"disableAllHooks":true,"disableClaudeAiConnectors":true,"fastMode":false}',
-            "--permission-prompts",
-            "none",
-            "--permission-mode",
-            "dontAsk",
-        ]
-        if request.permissions == "workspace_read":
-            tools = ",".join(_CLAUDE_READ_TOOLS)
-            args.extend(["--tools", tools, "--allowedTools", tools])
-        else:
-            args.extend(["--tools", ""])
-        if request.model:
-            args.extend(["--model", request.model])
-        if request.effort:
-            args.extend(["--effort", request.effort])
-        return args
+        return claude_command_options(
+            request.permissions, request.model, request.effort
+        )
 
     raise Failure("unsupported_setting", "Choose the codex or claude provider.")
 

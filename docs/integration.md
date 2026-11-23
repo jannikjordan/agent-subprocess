@@ -1,14 +1,15 @@
 # Integrate with an existing Python project
 
 The examples use the [public Python API](session-contract.md). Install the
-package and run the [offline example](../README.md#try-it-without-a-provider-account)
+package and run the [offline example](../README.md#try-the-example-offline)
 to see the proxy in a worker or request handler without using an account.
 
 ## Set up the worker
 
 1. Use a supported host with the official provider CLI installed and
    authorized for the intended workload. Check the [compatibility record](providers.md)
-   for that binary version, OS and permission profile.
+   for that binary version, OS and permission profile. On Windows, install
+   the native executable and run with Python's default Proactor event loop.
 2. Resolve the provider, model, effort, deadline and workspace from trusted
    application settings. If the app lets users select a model or provider,
    validate the selection against the app's allowlist. Resolve workspace
@@ -95,8 +96,7 @@ to the app's job events from the browser.
   optional diagnostic metadata in this release.
 - Publish events under the app's job access rules and store the result after
   checking its terminal status. For a machine-readable handoff, parse and
-  validate the answer in the app before taking an action. See the
-  [plan](plan.md) for native schema support.
+  validate the answer in the app before taking an action.
 - Route user cancellation to the worker that owns the live session.
   Base retry decisions on the error and any side effects of the previous
   attempt. On worker loss, use the queue's reconciliation and retry policy.

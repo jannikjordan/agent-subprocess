@@ -3,10 +3,8 @@
 import argparse
 import asyncio
 import json
-import shutil
 import sys
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from provider_cli_proxy import Client, Prompt, RunRequest
 
@@ -116,13 +114,14 @@ def main() -> int:
     try:
         if args.live:
             return asyncio.run(analyze(args, Client()))
-        with TemporaryDirectory(prefix="proxy-analysis-") as directory:
-            executable = Path(directory) / args.provider
-            shutil.copyfile(EXAMPLE_DIR / "fake_provider.py", executable)
-            executable.chmod(0o700)
-            return asyncio.run(
-                analyze(args, Client(executables={args.provider: str(executable)}))
-            )
+        executable = (
+            sys.executable,
+            str(EXAMPLE_DIR / "fake_provider.py"),
+            args.provider,
+        )
+        return asyncio.run(
+            analyze(args, Client(executables={args.provider: executable}))
+        )
     except KeyboardInterrupt:
         return 130
 

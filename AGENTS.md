@@ -38,6 +38,7 @@ and reviews.
    check official docs and installed CLI help, and record the tested versions.
    Verify relevant failure cases alongside the success path. Report any
    unrun live checks and keep credentials and transcripts out of Git.
+   Use only Haiku for live Claude Code tests. Select it explicitly.
 3. Get independent diff review before integration. Record the verdict and
    reviewed revision on the PR, or in the task handoff for local work. Fix
    blocking findings and have the Reviewer verify the final revision. Run
@@ -60,7 +61,9 @@ before adding them.
 ## Git
 
 - Use `dev` for integration and `main` for owner-controlled promotion and
-  releases. Publish `main` from a tested `dev` revision after owner approval.
+  releases. Open release PRs from tested `dev` revisions. Check the macOS,
+  Windows and Linux workflow results before asking the owner to approve
+  `main`.
 - Branch from current `dev` as `type/slug`. Use one branch and one PR per
   task. Use `type(scope): subject` with a lowercase imperative subject.
   Preserve shared history and run the hooks. Update a shared task branch by
@@ -73,6 +76,11 @@ before adding them.
   it ready and integrate it after independent review and green required
   checks. Required branch protections apply when configured. Promotion to
   `main`, releases and tags require the owner.
+- After integration, remove the merged work branch locally and on the remote.
+  Confirm its head is reachable from the target and check active worktrees
+  before deleting it. Preserve `dev`, `main` and branches with unmerged work.
+- Update [CHANGELOG.md](CHANGELOG.md) for public changes. Follow
+  [versioning and releases](docs/versioning.md) when preparing a release PR.
 - Any GitHub remote created for this project is private. Use English in
   repository text. Keep rules in one place and update the affected docs
   when behavior changes.

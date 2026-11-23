@@ -1,0 +1,30 @@
+name: Windows tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  fixtures:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'run-windows-tests'
+    runs-on: windows-2025
+    timeout-minutes: 4
+    env:
+      DO_NOT_TRACK: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - run: python -m venv .venv
+      - run: .\.venv\Scripts\python.exe -m pip install .
+      - run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+      - run: .\.venv\Scripts\python.exe -m unittest discover -s examples/analysis_job -v

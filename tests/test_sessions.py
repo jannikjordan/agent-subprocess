@@ -1,13 +1,14 @@
 import asyncio
+import errno
 import json
 import os
-import shlex
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from _process_fixture import lock_byte
 from provider_cli_proxy import Client, Prompt, RunRequest
 
 
@@ -36,6 +37,47 @@ emit({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'Read
 """
 
 CLI_VERSIONS = {"codex": "codex-cli 0.171.0", "claude": "2.1.330 (Claude Code)"}
+WORKSPACE_POLICY = "provider_cli_proxy._providers._WORKSPACE_READ_SUPPORTED"
+PROCESS_FIXTURE = Path(__file__).with_name("_process_fixture.py").resolve()
+CODEX_ACCOUNT = {
+    "account": {"type": "chatgpt", "planType": "prolite"},
+    "requiresOpenaiAuth": True,
+}
+CLAUDE_ACCOUNT = {
+    "loggedIn": True,
+    "authMethod": "claude.ai",
+    "apiProvider": "firstParty",
+    "subscriptionType": "max",
+}
+
+
+def auth_fixture(provider, status):
+    if provider == "codex":
+        return f"""
+if sys.argv[1:2] == ['app-server']:
+    initialize = json.loads(sys.stdin.readline())
+    assert initialize['method'] == 'initialize'
+    assert 'forced_login_method' not in ' '.join(sys.argv)
+    assert os.getenv('CODEX_INTERNAL_APP_SERVER_REMOTE_CONTROL_DISABLED') == '1'
+    emit({{'id': initialize['id'], 'result': {{}}}})
+    assert json.loads(sys.stdin.readline()) == {{'method': 'initialized'}}
+    check = json.loads(sys.stdin.readline())
+    assert check['method'] == 'account/read' and check['params'] == {{'refreshToken': False}}
+    result = {status!r}
+    if isinstance(result, str):
+        print(result, flush=True)
+    else:
+        emit({{'id': check['id'], 'result': result}})
+    assert not sys.stdin.read()
+    sys.exit()
+"""
+    return f"""
+if sys.argv[-3:] == ['auth', 'status', '--json']:
+    assert not sys.stdin.read()
+    result = {status!r}
+    print(result if isinstance(result, str) else json.dumps(result, indent=2))
+    sys.exit(int(isinstance(result, dict) and result.get('loggedIn') is False))
+"""
 
 
 class SessionsTest(unittest.IsolatedAsyncioTestCase):
@@ -46,30 +88,26 @@ class SessionsTest(unittest.IsolatedAsyncioTestCase):
         self.workspace = self.root / "workspace.with spaces"
         self.workspace.mkdir()
 
-    def fake(self, body, *, provider="codex", version=None):
-        binary = self.root / "fake-cli"
+    def fake(self, body, *, provider="codex", version=None, auth=None):
         script = self.root / "fake_cli.py"
         if version is None:
             version = CLI_VERSIONS[provider]
+        if auth is None:
+            auth = CODEX_ACCOUNT if provider == "codex" else CLAUDE_ACCOUNT
         script.write_text(
             "import json, os, signal, subprocess, sys, time\n"
             "from pathlib import Path\n"
             "def emit(event): print(json.dumps(event), flush=True)\n"
             "if sys.argv[1:] == ['--version']:\n"
             f"    print({version!r})\n"
-            "    sys.exit()\n" + body,
+            "    sys.exit()\n" + auth_fixture(provider, auth) + body,
             encoding="utf-8",
         )
-        binary.write_text(
-            f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(script))} "$@"\n',
-            encoding="utf-8",
-        )
-        binary.chmod(0o700)
-        return binary
+        return sys.executable, str(script)
 
     def request(self, provider="codex", **kwargs):
         kwargs.setdefault("prompt", Prompt.text("Follow the synthetic instructions."))
-        kwargs.setdefault("deadline_seconds", 2)
+        kwargs.setdefault("deadline_seconds", 10)
         return RunRequest(provider, self.workspace, **kwargs)
 
     async def stream(self, client, request):
@@ -90,7 +128,7 @@ class SessionsTest(unittest.IsolatedAsyncioTestCase):
         binary = self.fake(
             f"""
 Path({str(capture)!r}).write_text(json.dumps({{
-    'args': sys.argv[1:], 'cwd': os.getcwd(), 'prompt': sys.stdin.read(),
+    'args': sys.argv[1:], 'cwd': os.getcwd(), 'prompt': sys.stdin.buffer.read().decode('utf-8'),
     'secret_inherited': 'FAKE_APP_PRIVATE_VAR' in os.environ,
     'telemetry_off': os.getenv('DO_NOT_TRACK'),
 }}))
@@ -131,14 +169,15 @@ Path({str(capture)!r}).write_text(json.dumps({{
 
     async def test_claude_file_prompt_deltas_and_final_snapshot(self):
         instructions = self.workspace / "task.md"
-        instructions.write_text("Instructions from a file.\n", encoding="utf-8")
+        instructions.write_bytes(b"Instructions from a file.\r\n")
         binary = self.fake(
             """
-assert sys.stdin.read() == 'Instructions from a file.\\n'
+assert sys.stdin.buffer.read() == b'Instructions from a file.\\r\\n'
 assert '--safe-mode' in sys.argv and '--restricted' in sys.argv
 assert '--disable-slash-commands' in sys.argv and '--strict-mcp-config' in sys.argv
 assert sys.argv[sys.argv.index('--tools') + 1] == ''
 assert sys.argv[sys.argv.index('--permission-prompts') + 1] == 'none'
+assert sys.argv[sys.argv.index('--model') + 1] == 'haiku'
 assert sys.argv[sys.argv.index('--effort') + 1] == 'low'
 assert os.getenv('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC') == '1'
 """
@@ -148,20 +187,20 @@ assert os.getenv('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC') == '1'
         )
         client = Client(executables={"claude": binary})
         request = self.request(
-            "claude", effort="low", prompt=Prompt.from_file(instructions)
+            "claude", model="haiku", effort="low", prompt=Prompt.from_file(instructions)
         )
         events, result = await self.stream(client, request)
+        self.assertEqual(result.status, "succeeded", result.error)
         self.assertEqual([e.text for e in events if e.text], ["Read", "Ready."])
-        self.assertEqual(result.status, "succeeded")
         self.assertEqual(result.actual_model, "test-model")
         self.assertEqual(result.native_session_id, "test-session")
         self.assertEqual(result.usage, {"output_tokens": 2})
 
     async def test_read_policy_arguments(self):
         for provider in CLI_VERSIONS:
-            with self.subTest(provider=provider), patch("sys.platform", "darwin"):
+            with self.subTest(provider=provider), patch(WORKSPACE_POLICY, True):
                 program = """
-assert sys.stdin.read().startswith('Read task.md')
+assert sys.stdin.buffer.read().startswith(b'Read task.md')
 """
                 if provider == "codex":
                     program += (
@@ -204,7 +243,7 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
                         provider=provider,
                         version=version,
                     )
-                    with patch("sys.platform", "darwin"):
+                    with patch(WORKSPACE_POLICY, True):
                         events, result = await self.stream(
                             Client(executables={provider: binary}),
                             self.request(provider, permissions=permissions),
@@ -214,7 +253,7 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
                     self.assertFalse(marker.exists())
 
     async def test_unsupported_workspace_platform(self):
-        with patch("sys.platform", "linux"):
+        with patch(WORKSPACE_POLICY, False):
             events, result = await self.stream(
                 Client(), self.request(permissions="workspace_read")
             )
@@ -223,7 +262,7 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
 
     async def test_codex_project_config_refused_without_launch(self):
         (self.root / ".codex").mkdir()
-        client = Client(executables={"codex": self.root / "absent"})
+        client = Client(executables={"codex": self.root / "absent.exe"})
         events, result = await self.stream(client, self.request())
         self.assertEqual([e.kind for e in events], ["finished"])
         self.assertEqual(result.error.code, "permission_denied")
@@ -320,19 +359,115 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
             (self.request(deadline_seconds=float("inf")), "invalid_request"),
         ):
             events, result = await self.stream(
-                Client(executables={"codex": self.root / "absent"}), request
+                Client(executables={"codex": self.root / "absent.exe"}), request
             )
             self.assertEqual([e.kind for e in events], ["finished"])
             self.assertEqual(result.error.code, expected)
 
-    async def test_no_path_returns_cli_missing(self):
-        with (
-            patch.dict(os.environ, {"HOME": str(self.root)}, clear=True),
-            patch("shutil.which", return_value=None) as which,
+    async def test_no_discovery_candidate_returns_cli_missing(self):
+        with patch(
+            "provider_cli_proxy._discovery._candidate_paths", return_value=iter(())
         ):
             _, result = await self.stream(Client(), self.request())
-        which.assert_called_once_with("codex", path=os.defpath)
         self.assertEqual(result.error.code, "cli_missing")
+
+    async def test_path_with_only_batch_shim_returns_cli_missing(self):
+        shim = self.root / "codex.cmd"
+        shim.write_text("@exit /b 1\n", encoding="utf-8")
+        with patch(
+            "provider_cli_proxy._discovery._candidate_paths", return_value=iter((shim,))
+        ):
+            _, result = await self.stream(Client(), self.request())
+        self.assertEqual(result.error.code, "cli_missing")
+
+    async def test_auto_discovery_skips_unusable_and_unsupported_launchers(self):
+        unusable, unsupported, verified = (
+            self.root / name for name in ("unusable", "unsupported", "verified")
+        )
+        attempted = []
+
+        async def run_fixture(
+            command, cwd, prompt, on_record, stop, deadline, on_started=None
+        ):
+            binary = Path(command[0])
+            attempted.append(binary)
+            if binary == unusable:
+                raise OSError("synthetic launch error")
+            if command[-1] == "--version":
+                on_record(
+                    b"unsupported"
+                    if binary == unsupported
+                    else CLI_VERSIONS["codex"].encode()
+                )
+            else:
+                on_started()
+                on_record(
+                    b'{"type":"item.completed","item":{"type":"agent_message","text":"Ready."}}'
+                )
+                on_record(b'{"type":"turn.completed"}')
+            return 0, ""
+
+        with (
+            patch(
+                "provider_cli_proxy._client.executable_candidates",
+                return_value=iter((unusable, unsupported, verified)),
+            ),
+            patch("provider_cli_proxy._client.run_child", side_effect=run_fixture),
+            patch("provider_cli_proxy._client.check_subscription") as check,
+        ):
+            result = await Client().run(self.request())
+        self.assertEqual(result.text, "Ready.")
+        self.assertEqual(attempted, [unusable, unsupported, verified, verified])
+        self.assertEqual(check.call_args.args[1], (str(verified),))
+
+    async def test_unverified_subscription_never_receives_prompt(self):
+        fixtures = [
+            ("codex", {**CODEX_ACCOUNT, "account": None}, "auth_required"),
+            (
+                "codex",
+                {**CODEX_ACCOUNT, "account": {"type": "apiKey"}},
+                "subscription_required",
+            ),
+            (
+                "codex",
+                {**CODEX_ACCOUNT, "account": {"type": "chatgpt", "planType": "free"}},
+                "subscription_required",
+            ),
+            (
+                "codex",
+                {**CODEX_ACCOUNT, "requiresOpenaiAuth": False},
+                "subscription_required",
+            ),
+            ("codex", "invalid private-status", "auth_check_failed"),
+            ("claude", {"loggedIn": False}, "auth_required"),
+            (
+                "claude",
+                {**CLAUDE_ACCOUNT, "authMethod": "api-key", "apiProvider": "anthropic"},
+                "subscription_required",
+            ),
+            (
+                "claude",
+                {**CLAUDE_ACCOUNT, "subscriptionType": "free"},
+                "subscription_required",
+            ),
+            ("claude", "invalid private-status", "auth_check_failed"),
+        ]
+        for provider, auth, expected in fixtures:
+            with self.subTest(provider=provider, expected=expected):
+                marker = self.root / "inference-started"
+                binary = self.fake(
+                    f"Path({str(marker)!r}).touch()\n",
+                    provider=provider,
+                    auth=auth,
+                )
+                events, result = await self.stream(
+                    Client(executables={provider: binary}), self.request(provider)
+                )
+                self.assertEqual([event.kind for event in events], ["finished"])
+                self.assertEqual(result.status, "failed")
+                self.assertEqual(result.error.code, expected)
+                self.assertNotIn("private-status", str(result.error))
+                self.assertFalse(marker.exists())
 
     async def test_normalizes_provider_failure_without_disclosing_details(self):
         for diagnostic, expected in (
@@ -405,50 +540,117 @@ emit({'type': 'turn.completed'})
             self.assertEqual((await anext(session.events())).kind, "started")
         self.assertEqual((await session.wait()).status, "cancelled")
 
-    async def test_deadline_kills_group_when_leader_exits(self):
-        # This child holds both output descriptors after its parent has printed a result.
+    def locked_process(self, name):
+        lock = self.root / f"{name}.lock"
+        lock.write_bytes(b"0")
+        ready = self.root / f"{name}.started"
+        source = f"""
+import runpy
+from pathlib import Path
+lock_byte = runpy.run_path({str(PROCESS_FIXTURE)!r})['lock_byte']
+locked = open({str(lock)!r}, 'r+b')
+lock_byte(locked)
+Path({str(ready)!r}).touch()
+"""
+        return lock, ready, source
+
+    async def assert_lock_released(self, lock):
+        for _ in range(40):
+            try:
+                with lock.open("r+b") as stream:
+                    lock_byte(stream)
+                return
+            except OSError as error:
+                if error.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
+                await asyncio.sleep(0.025)
+        self.fail(f"The provider process still holds {lock.name}.")
+
+    async def test_process_tree_is_cleaned_up_when_leader_exits(self):
+        lock, ready, source = self.locked_process("descendant")
+        child_code = source + "\nimport time\ntime.sleep(60)\n"
+        # The output pipes stay open until the proxy stops the descendant.
         binary = self.fake(
-            """
-subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+            f"""
+subprocess.Popen([sys.executable, '-c', {child_code!r}], stdout=sys.stdout, stderr=sys.stderr)
+while not Path({str(ready)!r}).exists(): time.sleep(0.01)
 """
             + CODEX_RESULT
         )
-        request = self.request(deadline_seconds=1)
-        result = await Client(executables={"codex": binary}).run(request)
-        self.assertEqual(result.status, "succeeded")
+        result = await Client(executables={"codex": binary}).run(self.request())
+        self.assertEqual(result.status, "succeeded", result.error)
+        self.assertTrue(ready.exists())
+        await self.assert_lock_released(lock)
 
     async def test_timeout_terminates_active_process(self):
         binary = self.fake("emit({'type': 'turn.started'}); time.sleep(60)\n")
-        _, result = await self.stream(
-            Client(executables={"codex": binary}), self.request(deadline_seconds=0.15)
+        events, result = await self.stream(
+            Client(executables={"codex": binary}),
+            self.request(deadline_seconds=3 if os.name == "nt" else 0.35),
         )
         self.assertEqual(result.status, "timed_out")
         self.assertEqual(result.error.code, "timeout")
+        self.assertIn("activity", [event.kind for event in events])
 
     async def test_timeout_after_early_pipe_close_does_not_cancel_process_exit(self):
-        marker = self.root / "pid"
-        binary = self.fake(f"""
-signal.signal(signal.SIGTERM, signal.SIG_IGN)
-Path({str(marker)!r}).write_text(str(os.getpid()))
+        lock, ready, source = self.locked_process("early-pipe-close")
+        binary = self.fake(
+            source
+            + """
+if os.name != 'nt': signal.signal(signal.SIGTERM, signal.SIG_IGN)
 for fd in (0, 1, 2): os.close(fd)
 time.sleep(60)
-""")
+"""
+        )
         client = Client(executables={"codex": binary})
         loop = asyncio.get_running_loop()
         original_handler = loop.get_exception_handler()
         loop_errors = []
         loop.set_exception_handler(lambda _loop, context: loop_errors.append(context))
         try:
-            _, result = await self.stream(client, self.request(deadline_seconds=0.35))
+            _, result = await self.stream(
+                client, self.request(deadline_seconds=3 if os.name == "nt" else 0.35)
+            )
         finally:
             loop.set_exception_handler(original_handler)
         self.assertEqual(result.status, "timed_out")
         self.assertFalse(loop_errors)
-        with self.assertRaises(ProcessLookupError):
-            os.kill(int(marker.read_text()), 0)
+        self.assertTrue(ready.exists())
+        await self.assert_lock_released(lock)
+
+    @unittest.skipUnless(os.name == "nt", "Requires Windows Job Objects.")
+    async def test_windows_job_assignment_failure_stops_bootstrap(self):
+        marker = self.root / "provider-started"
+        script = self.root / "startup_probe.py"
+        script.write_text(
+            f"from pathlib import Path\nPath({str(marker)!r}).touch()\n",
+            encoding="utf-8",
+        )
+        loop = asyncio.get_running_loop()
+        launch = loop.subprocess_exec
+        launched = []
+
+        async def capture_startup(*args, **kwargs):
+            transport, protocol = await launch(*args, **kwargs)
+            launched.append(transport)
+            return transport, protocol
+
+        client = Client(executables={"codex": (sys.executable, str(script))})
+        with (
+            patch("provider_cli_proxy._windows.WindowsJob", side_effect=OSError),
+            patch.object(loop, "subprocess_exec", capture_startup),
+        ):
+            events, result = await self.stream(client, self.request())
+
+        self.assertEqual(result.error.code, "provider_error")
+        self.assertEqual([event.kind for event in events], ["finished"])
+        self.assertFalse(marker.exists())
+        self.assertEqual(len(launched), 1)
+        self.assertIsNotNone(launched[0].get_returncode())
 
     async def test_cancel_while_spawn_is_returning(self):
-        binary = self.fake("time.sleep(60)\n")
+        marker = self.root / "inference-started"
+        binary = self.fake(f"Path({str(marker)!r}).touch(); time.sleep(60)\n")
         loop = asyncio.get_running_loop()
         launch = loop.subprocess_exec
         launched = asyncio.Future()
@@ -456,24 +658,29 @@ time.sleep(60)
 
         async def delay_startup(*args, **kwargs):
             transport, protocol = await launch(*args, **kwargs)
-            if args[-1] != "--version":
-                launched.set_result(transport.get_pid())
+            if "exec" in args:
+                launched.set_result(transport)
                 await release.wait()
             return transport, protocol
 
         client = Client(executables={"codex": binary})
         with patch.object(loop, "subprocess_exec", delay_startup):
             async with client.start(self.request()) as session:
-                pid = await launched
-                cancellation = asyncio.create_task(session.cancel())
-                await asyncio.sleep(0)
-                release.set()
+                try:
+                    transport = await asyncio.wait_for(
+                        asyncio.shield(launched), timeout=10
+                    )
+                    cancellation = asyncio.create_task(session.cancel())
+                    await asyncio.sleep(0)
+                finally:
+                    release.set()
                 result = await cancellation
                 events = [event async for event in session.events()]
         self.assertEqual(result.status, "cancelled")
         self.assertEqual([event.kind for event in events], ["finished"])
-        with self.assertRaises(ProcessLookupError):
-            os.kill(pid, 0)
+        self.assertIsNotNone(transport.get_returncode())
+        if os.name == "nt":
+            self.assertFalse(marker.exists())
 
     async def test_cumulative_answer_size_is_bounded(self):
         binary = self.fake(

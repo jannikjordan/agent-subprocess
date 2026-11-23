@@ -12,9 +12,10 @@ Both CLIs used their existing signed-in accounts and synthetic inputs.
 Both permission profiles require the exact CLI versions in the table.
 The wrapper checks the version before sending the prompt so a CLI update
 cannot silently change the permission flags. `workspace_read` is available
-on macOS. Linux supports `prompt_only` and its test coverage uses fixture
-CLIs. Live Linux inference and native session resume have no verification
-record yet.
+on macOS. The `prompt_only` process runner also targets Windows and Linux.
+Use `Prompt.from_file(...)` on either OS to send the contents of a trusted
+task file. Local inference was exercised on macOS. Separate fixture runs
+check the OS-specific startup, pipes and process cleanup.
 
 ## Codex
 
@@ -71,6 +72,86 @@ dedicated trusted host with trusted system and administrator configuration.
 Managed configuration can take precedence over CLI options. For separate
 users or untrusted workloads, apply an independent OS or container boundary
 and validate it before sharing the worker.
+
+## Binary discovery
+
+The default client searches absolute PATH entries first, then known
+locations for native installers and package managers. It uses the first
+compatible binary. Set an absolute `executables` override to select a specific
+installation.
+
+| OS | Known layouts |
+| --- | --- |
+| macOS | Native user installs, Apple Silicon and Intel Homebrew, standard npm prefixes, common binary directories, and known Codex desktop application bundles |
+| Linux | Native user installs, Linuxbrew, standard npm prefixes and standard system and user binary locations |
+| Windows | Native installer locations, WinGet links and recognized packages, and native payloads under standard npm prefixes |
+
+`codex app-server` is a command on the full Codex CLI. The proxy uses it to
+read account status and uses `codex exec` for inference. An installation
+providing a standalone App Server component needs the full CLI for this API.
+
+[Codex installation](https://learn.chatgpt.com/docs/cli)
+[Claude Code installation](https://code.claude.com/docs/en/setup)
+
+## Subscription sign-in
+
+The proxy checks the selected CLI account before sending prompt text. Codex
+uses a one-shot App Server `account/read` probe. Claude Code uses
+`auth status --json`. The check reads the authenticated account and its
+plan, and keeps returned identities and diagnostics out of results.
+
+| Error | What the application should show |
+| --- | --- |
+| `auth_required` | Sign in through `codex login` or `claude auth login` on this worker. |
+| `subscription_required` | Select an account with a supported subscription in the CLI. An API key or free account is insufficient. |
+| `auth_check_failed` | The CLI returned an unreadable account status. Check the installed binary and try again. |
+
+The check is a snapshot. Quota, workspace policy and concurrent sign-in
+changes still affect what the provider accepts when a job starts.
+
+[Codex account status](https://learn.chatgpt.com/docs/app-server#1-check-auth-state)
+[Claude CLI authentication](https://code.claude.com/docs/en/cli-reference)
+
+## List providers and usage
+
+`await Client().list_providers()` returns one `ProviderInfo` per provider.
+Each entry describes the detected executable, its version, whether the
+version is compatible, sign-in status, and the plan when available.
+
+```python
+async def show_providers(client):
+    for provider in await client.list_providers(include_usage=True):
+        print(provider.provider, provider.version, provider.auth_status)
+        for window in provider.limits:
+            reset = window.resets_at.isoformat() if window.resets_at else None
+            print(window.kind, window.used_percent, reset)
+```
+
+Usage is opt-in. `limits` contains reported session or weekly windows,
+with usage as a percentage and a UTC reset time when supplied. A reported
+zero is a real reading. Use `usage_status` to distinguish a skipped check
+from unavailable quota data. A signed-in account can have unavailable limits.
+
+Codex uses App Server's `account/rateLimits/read`. Claude uses a read-only
+`get_usage` control request when supported. These checks can contact provider
+status services. They start no inference session and expose no account email,
+account ID or raw status response.
+
+[Codex rate limits](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt)
+[Claude usage control](https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/CHANGELOG.md#03169)
+
+## Windows setup
+
+Use the native `codex.exe` or `claude.exe` from the provider. If the CLI was
+installed using a command shim, point the client at the native executable
+with the `executables` setting. The process runner uses Win32 Job Objects
+for cancellation and cleanup, and requires the default Python Proactor
+event loop. Hosted or embedded applications using a Selector event loop
+can run the proxy in a dedicated worker process.
+
+[Codex release binaries](https://github.com/openai/codex/releases/tag/rust-v0.171.0)
+[Claude Code setup on Windows](https://code.claude.com/docs/en/setup#setup-on-windows)
+[Python subprocess support](https://docs.python.org/3/library/asyncio-subprocess.html)
 
 The Corduno reference app has separate runtime evidence for older versions.
 [Corduno provider evidence](https://github.com/getcorduno/documentation/blob/59f041cd0061105c63e58772fa54e1b0d82bbb71/evidence/providers.md)

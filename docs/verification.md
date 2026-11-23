@@ -25,13 +25,25 @@ runs without provider credentials or inference.
 | Permissions | Run in a disposable workspace with synthetic inherited hooks and MCP configuration. Verify denial of writes, reads outside the approved workspace, and agent-initiated network access. Use only fixture files and local test endpoints. Check that restricted profiles suppress inherited capabilities and refuse unsupported hosts or CLIs. |
 | Structured data | When schemas ship, cover valid and invalid final output and malformed or unauthorized progress reports. Keep provider diagnostics out of answer and report payloads. |
 
-Run opt-in smoke checks on macOS and Linux with the actual supported CLIs
-and an authorized account. Use synthetic data. Run the same small analysis
+Run opt-in smoke checks on macOS, Windows and Linux with the supported CLIs
+and an authorized account. Use synthetic data and select `--model haiku`
+explicitly for every live Claude Code test. Run the same small analysis
 task with each provider, including a non-Git workspace, and verify the final
 answer and the advertised events. Repeat permission and cancellation checks
 on each supported combination. Record versions and results in the
 compatibility guide. A fake process tests the wrapper. Actual CLI smoke
 results establish runtime compatibility.
+
+The Windows workflow runs the installed package and fixture suites without
+provider credentials. It can run on a `dev` revision through manual dispatch,
+or on the exact pull request head when the `run-windows-tests` label is
+applied. The job uses a private GitHub-hosted runner allocation.
+
+Pull requests targeting `main` automatically run the installed-package and
+example suites on Linux, Windows and macOS. These jobs use fake executables
+and synthetic account responses. Review the three `Release checks` results
+before approving a release PR. Signed-in provider checks run on an
+authorized local host.
 
 ## Consuming project checks
 

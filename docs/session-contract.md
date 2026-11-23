@@ -1,8 +1,7 @@
 # Python session contract
 
 Import the public types from `provider_cli_proxy`. See the
-[compatibility record](providers.md) for supported runtime features and the
-[plan](plan.md) for session resume, output schemas and live task reports.
+[compatibility record](providers.md) for supported runtime features.
 
 ## Request
 
@@ -21,10 +20,14 @@ workspace and the requested permission profile independently of prompt text.
 
 ## Run and cancellation
 
-- `Client()` resolves the official CLI executables on `PATH`. The optional
-  `executables` mapping selects trusted absolute paths for testing or worker
-  setup. Choose executables in deployment configuration. Each run checks the
-  exact supported CLI version before sending the prompt. Use
+- `Client()` resolves the official CLI using PATH and the known locations in
+  the [provider guide](providers.md#binary-discovery). The optional
+  `executables` mapping selects a trusted absolute path or a tuple with the
+  absolute executable path followed by fixed launcher arguments. Choose
+  executables in deployment configuration. Windows uses native `.exe`
+  launchers and the default Proactor event loop. Each run checks the
+  exact supported CLI version and subscription sign-in before sending the
+  prompt. Use
   `await client.run(request)` to get a `RunResult` without a streaming consumer.
 - `async with client.start(request) as session` starts a run. Use
   `session.events()` for one async event iterator, `await session.wait()` for
@@ -40,8 +43,18 @@ workspace and the requested permission profile independently of prompt text.
   events, the remaining live updates are dropped and `stream_truncated`
   precedes `finished`. The final result remains authoritative. The runner
   caps native records at 1 MiB and total emitted answer text at 4 MiB.
-  Cancellation and deadline handling stop the managed process group and
-  resolve the same terminal outcome for both readers.
+  Cancellation and deadline handling stop the managed process group on POSIX
+  or the Win32 Job Object on Windows, then resolve the same terminal outcome
+  for both readers.
+
+## Provider inventory
+
+Use `await client.list_providers(include_usage=False, deadline_seconds=15)` to
+inspect availability without a prompt. The result contains `ProviderInfo`
+entries for both providers, including missing or incompatible CLIs. Inspect
+`auth_status` and `error` to decide what the user should do next. Ask for
+usage explicitly to get `RateLimitWindow` entries where reported. See
+[provider inventory](providers.md#list-providers-and-usage).
 
 ## Events and results
 
@@ -51,7 +64,7 @@ one `finished` event carrying a `RunResult`, including when startup fails.
 
 | Event | Meaning |
 | --- | --- |
-| `started` | The provider process started. Native session metadata can arrive later. |
+| `started` | The managed launch is active. Native session metadata can arrive later. |
 | `activity` | Available user-visible work status from the runtime, such as a tool starting or completing. |
 | `answer_delta` | Append this text to the current response. Produced by a transport that exposes text deltas. |
 | `answer_snapshot` | Replace the current response with this complete text. Used for completed messages or to reconcile the displayed answer. |
@@ -66,8 +79,9 @@ an interrupted run and must retain its interrupted status.
 
 Unsuccessful results carry a normalized `error` with `code` and `message`.
 Expected codes include `cli_missing`, `invalid_request`,
-`unsupported_setting`, `permission_denied`, `auth_required`, `quota_exceeded`,
-`provider_error`, `protocol_error`, `timeout` and `cancelled`. Provider
+`unsupported_setting`, `permission_denied`, `auth_required`,
+`subscription_required`, `auth_check_failed`, `quota_exceeded`, `provider_error`,
+`protocol_error`, `timeout` and `cancelled`. Provider
 completion and a usable result are both required for success. Missing or
 malformed terminal output produces a protocol failure when no recognized
 provider failure explains the exit, even if the process exit code is zero.

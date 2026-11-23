@@ -83,7 +83,8 @@ belong to the consuming orchestrator.
    deadlines and process cleanup with fake CLIs. Run deterministic tests
    without account access and opt-in compatibility checks with the official
    binaries. Check that restricted runs deny writes and cannot activate
-   inherited hooks or MCP servers. Start verification on macOS and Linux.
+   inherited hooks or MCP servers. Verify the runner on macOS, Windows and
+   Linux. Use Haiku for every live Claude Code test.
 2. **Assistant and workflow features.** Add explicit resume, native text
    deltas where supported, final JSON Schema output and opt-in live task
    reports. Prove the same package can drive an app's streamed assistant
