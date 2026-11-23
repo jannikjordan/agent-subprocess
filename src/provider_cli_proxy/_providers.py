@@ -13,10 +13,11 @@ _NONESSENTIAL_ENV = {
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 }
 _ENV_KEYS = {"HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "PATH", "TMPDIR", "USER"}
-WORKSPACE_CLI_VERSIONS = {
+CLI_VERSIONS = {
     "codex": b"codex-cli 0.171.0",
     "claude": b"2.1.330 (Claude Code)",
 }
+_CLAUDE_READ_TOOLS = ("Read", "Glob", "Grep")
 
 _CODEX_CONFIG = (
     "approval_policy='never'",
@@ -175,7 +176,7 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
             "dontAsk",
         ]
         if request.permissions == "workspace_read":
-            tools = "Read,Glob,Grep"
+            tools = ",".join(_CLAUDE_READ_TOOLS)
             args.extend(["--tools", tools, "--allowedTools", tools])
         else:
             args.extend(["--tools", ""])
@@ -270,6 +271,10 @@ class Decoder:
         self.error: RunError | None = None
         self.hint: RunError | None = None
         self.terminal = False
+        self._claude_initialized = False
+        self._claude_tools = (
+            _CLAUDE_READ_TOOLS if permissions == "workspace_read" else ()
+        )
 
     def decode(self, record: bytes) -> tuple[EventKind, str] | None:
         try:
@@ -346,25 +351,29 @@ class Decoder:
     def _claude(self, event: dict[str, Any]) -> tuple[EventKind, str] | None:
         kind = event["type"]
         if kind == "system" and event.get("subtype") == "init":
-            self.native_session_id = _token(event.get("session_id"))
-            self.actual_model = _token(event.get("model"))
             tools = event.get("tools")
-            allowed_tools = (
-                {"Read", "Glob", "Grep"}
-                if self.permissions == "workspace_read"
-                else set()
-            )
-            if isinstance(tools, list) and any(
-                not isinstance(tool, str) or tool not in allowed_tools for tool in tools
+            servers = event.get("mcp_servers")
+            if (
+                self._claude_initialized
+                or not isinstance(tools, list)
+                or not all(isinstance(tool, str) for tool in tools)
+                or not isinstance(servers, list)
             ):
+                raise Failure(
+                    "protocol_error", "Claude sent invalid tool capability metadata."
+                )
+            if any(tool not in self._claude_tools for tool in tools):
                 raise Failure(
                     "permission_denied",
                     "Claude exposed tools outside the requested profile.",
                 )
-            if event.get("mcp_servers"):
+            if servers:
                 raise Failure(
                     "permission_denied", "Claude loaded an unexpected tool server."
                 )
+            self.native_session_id = _token(event.get("session_id"))
+            self.actual_model = _token(event.get("model"))
+            self._claude_initialized = True
             return "activity", "turn_started"
         if kind == "result":
             self._complete()
@@ -401,13 +410,24 @@ class Decoder:
                     "protocol_error", "Claude emitted a malformed terminal result."
                 )
             else:
+                if not self._claude_initialized:
+                    raise Failure(
+                        "protocol_error", "Claude did not report its tool capabilities."
+                    )
                 self.text = text
                 return "answer_snapshot", text
-        if event.get("parent_tool_use_id") is not None:
+        if not self._claude_initialized:
             return None
+        primary = event.get("parent_tool_use_id") is None
         if kind == "stream_event" and isinstance(stream := event.get("event"), dict):
+            if stream.get("type") == "content_block_start":
+                self._claude_tool_use(stream.get("content_block"))
             delta = stream.get("delta")
-            if stream.get("type") == "content_block_delta" and isinstance(delta, dict):
+            if (
+                primary
+                and stream.get("type") == "content_block_delta"
+                and isinstance(delta, dict)
+            ):
                 if delta.get("type") == "text_delta" and isinstance(
                     text := delta.get("text"), str
                 ):
@@ -417,13 +437,30 @@ class Decoder:
         ):
             content = message.get("content")
             if isinstance(content, list):
-                content_kind = "tool_use" if kind == "assistant" else "tool_result"
-                if any(
-                    isinstance(item, dict) and item.get("type") == content_kind
+                if kind == "assistant":
+                    tools_used = False
+                    for item in content:
+                        tools_used = self._claude_tool_use(item) or tools_used
+                    if primary and tools_used:
+                        return "activity", "tool_started"
+                elif primary and any(
+                    isinstance(item, dict) and item.get("type") == "tool_result"
                     for item in content
                 ):
-                    return (
-                        "activity",
-                        "tool_started" if kind == "assistant" else "tool_completed",
-                    )
+                    return "activity", "tool_completed"
         return None
+
+    def _claude_tool_use(self, block: object) -> bool:
+        if not isinstance(block, dict) or block.get("type") not in (
+            "tool_use",
+            "server_tool_use",
+        ):
+            return False
+        if (
+            block.get("type") != "tool_use"
+            or block.get("name") not in self._claude_tools
+        ):
+            raise Failure(
+                "permission_denied", "Claude used a tool outside the requested profile."
+            )
+        return True

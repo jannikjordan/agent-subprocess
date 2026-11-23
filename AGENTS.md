@@ -21,10 +21,10 @@ coordination starts as Orchestrator.
 The Orchestrator can start maintenance sub-sessions and delegate independent
 work within the tools, permissions, concurrency and budget available. Give
 each worker one task, with the base revision, owned paths, acceptance checks
-and a delivery format. Isolate concurrent writers in worktrees. Prefer the
-other provider for independent review when available within budget. A fresh
-session on the same provider is acceptable. Use a small model for bounded
-research or mechanical work and reserve stronger models for plans and reviews.
+and a delivery format. Isolate concurrent writers in worktrees. Run
+independent plan and code reviews in fresh Codex sessions. Use a small model
+for bounded research or mechanical work and reserve stronger models for plans
+and reviews.
 
 ## Work and review
 
@@ -60,8 +60,7 @@ before adding them.
 ## Git
 
 - Use `dev` for integration and `main` for owner-controlled promotion and
-  releases. The initial documentation can be committed on a local foundation
-  branch before those branches exist.
+  releases. Publish `main` from a tested `dev` revision after owner approval.
 - Branch from current `dev` as `type/slug`. Use one branch and one PR per
   task. Use `type(scope): subject` with a lowercase imperative subject.
   Preserve shared history and run the hooks. Update a shared task branch by

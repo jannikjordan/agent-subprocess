@@ -85,9 +85,10 @@ Use the final result to reconcile the displayed answer and finish the job.
 ## Provider boundaries
 
 Use a trusted worker host and approved workspaces. `prompt_only` is for
-prompts supplied as text. The compatibility guide records where an adapter
-can offer `workspace_read` and which restrictions were verified. Unsupported
-permission profiles fail before inference. Keep authentication with the
+prompts supplied as text. Install an exact CLI version from the compatibility
+guide. It also lists where an adapter can offer `workspace_read` and which
+restrictions were verified. Unsupported profiles and CLI versions fail before
+inference. Keep authentication with the
 official CLI and use an OS or container boundary where your application
 requires isolation between users. Local CLIs send prompts to their configured
 providers.

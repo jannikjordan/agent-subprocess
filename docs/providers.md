@@ -9,10 +9,12 @@ Both CLIs used their existing signed-in accounts and synthetic inputs.
 | Codex | `0.171.0` | `gpt-6-luna`, `low` | `prompt_only`, `workspace_read` | Completed snapshots |
 | Claude Code | `2.1.330` | `haiku`, `low` | `prompt_only`, `workspace_read` | Text deltas and completed snapshots |
 
-`workspace_read` checks the installed CLI version and is currently available
-only on macOS with the exact versions in the table. Linux uses the same
-Python API and process runner. Its test coverage uses fixture CLIs. Live
-Linux inference and native session resume have no verification record yet.
+Both permission profiles require the exact CLI versions in the table.
+The wrapper checks the version before sending the prompt so a CLI update
+cannot silently change the permission flags. `workspace_read` is available
+on macOS. Linux supports `prompt_only` and its test coverage uses fixture
+CLIs. Live Linux inference and native session resume have no verification
+record yet.
 
 ## Codex
 
@@ -43,7 +45,8 @@ Linux inference and native session resume have no verification record yet.
   effort levels depend on model and CLI version. The final `result` event
   carries the outcome. Inspect it alongside the process exit status.
 - Claude starts in safe and restricted modes with MCP and approval prompts
-  disabled. `prompt_only` exposes no built-in tools. `workspace_read`
+  disabled. The adapter checks the capability report at session startup.
+  `prompt_only` exposes no built-in tools. `workspace_read`
   selects `Read`, `Glob` and `Grep` within the working directory. The live
   fixture read returned only the approved workspace marker and a fixture
   project hook did not run. The live CLI reported `claude-haiku-5-5` for the

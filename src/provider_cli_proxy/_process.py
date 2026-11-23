@@ -112,7 +112,7 @@ async def _interact(
                     "protocol_error", "The CLI left an output stream open after exit."
                 )
         await pipes
-        return await protocol.exited, tasks[2].result()
+        return await asyncio.shield(protocol.exited), tasks[2].result()
     finally:
         for task in tasks:
             task.cancel()
@@ -135,6 +135,7 @@ async def _cleanup(protocol: _ProcessProtocol, worker: asyncio.Task | None) -> N
         if _signal_group(protocol.process, signal.SIGTERM):
             await asyncio.sleep(_GRACE)
             _signal_group(protocol.process, signal.SIGKILL)
+        await asyncio.wait((protocol.exited,), timeout=_GRACE)
     finally:
         protocol.process.close()
         if worker is not None:

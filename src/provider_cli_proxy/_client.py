@@ -11,7 +11,7 @@ from ._models import MAX_PROMPT_BYTES, EventKind, Prompt, Provider, RunError, Ru
 from ._models import RunRequest, RunResult, RunStatus
 from ._process import run_child
 from ._providers import (
-    WORKSPACE_CLI_VERSIONS,
+    CLI_VERSIONS,
     Decoder,
     Failure,
     child_environment,
@@ -172,9 +172,9 @@ class Session:
         )
         if not binary:
             raise Failure("cli_missing", "Install the requested official provider CLI.")
+        binary = str(Path(binary).resolve(strict=True))
         deadline = started_at + seconds
-        if self._request.permissions == "workspace_read":
-            await self._check_workspace_version(binary, cwd, deadline)
+        await self._check_cli_version(binary, cwd, deadline)
         returncode, stderr = await run_child(
             [binary, *options],
             cwd,
@@ -185,7 +185,10 @@ class Session:
             lambda: self._emit("started"),
         )
         if decoder.error is not None:
-            raise Failure(decoder.error.code, decoder.error.message)
+            error = decoder.error
+            if error.code == "provider_error":
+                error = recognized_error(stderr) or error
+            raise Failure(error.code, error.message)
         if (
             returncode != 0
             or not decoder.terminal
@@ -204,29 +207,27 @@ class Session:
                 "protocol_error", "The CLI exited without a usable terminal answer."
             )
 
-    async def _check_workspace_version(
-        self, binary: str, cwd: Path, deadline: float
-    ) -> None:
-        expected = WORKSPACE_CLI_VERSIONS[self._request.provider]
+    async def _check_cli_version(self, binary: str, cwd: Path, deadline: float) -> None:
+        expected = CLI_VERSIONS[self._request.provider]
         matched = False
+
+        def unsupported_version() -> Failure:
+            return Failure(
+                "unsupported_setting",
+                f"Use the verified provider CLI version: {expected.decode('ascii')}.",
+            )
 
         def check(record: bytes) -> None:
             nonlocal matched
             if matched or record.strip() != expected:
-                raise Failure(
-                    "unsupported_setting",
-                    "This CLI version has no verified workspace-only policy.",
-                )
+                raise unsupported_version()
             matched = True
 
         code, _ = await run_child(
             [binary, "--version"], cwd, b"", check, self._stop, deadline
         )
         if code != 0 or not matched:
-            raise Failure(
-                "unsupported_setting",
-                "This CLI version has no verified workspace-only policy.",
-            )
+            raise unsupported_version()
 
     async def _run(self, started_at: float) -> RunResult:
         decoder = Decoder(self._request.provider, self._request.permissions)

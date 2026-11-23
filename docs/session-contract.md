@@ -23,7 +23,8 @@ workspace and the requested permission profile independently of prompt text.
 
 - `Client()` resolves the official CLI executables on `PATH`. The optional
   `executables` mapping selects trusted absolute paths for testing or worker
-  setup. Choose executables in deployment configuration. Use
+  setup. Choose executables in deployment configuration. Each run checks the
+  exact supported CLI version before sending the prompt. Use
   `await client.run(request)` to get a `RunResult` without a streaming consumer.
 - `async with client.start(request) as session` starts a run. Use
   `session.events()` for one async event iterator, `await session.wait()` for

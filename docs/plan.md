@@ -17,8 +17,8 @@ with macOS and Linux as the initial verification targets.
 | 4. Tool extensions | Publish integration examples for authorized tools after verifying the host's permission boundary. The consuming app supplies tool policy and manages its own queue, accounts, network and machines. |
 
 Phases 1 and 2 are the first delivery. Work in branches off `dev` and
-integrate reviewed, tested changes into `dev`. Promote to `main` after
-release checks pass and the owner approves the release.
+integrate tested changes after independent Codex review. Promote to `main`
+after release checks pass and the owner approves the release.
 
 ## Implementation
 
@@ -33,9 +33,10 @@ release checks pass and the owner approves the release.
   with telemetry disabled and avoid implicit credentials or paid fallbacks.
   Capture safe error codes and summaries. Suppress raw diagnostics and
   provider payloads from application-facing status.
-- For `prompt_only`, disable host execution and workspace customization in
-  the supported CLI configuration. Treat the installed binary, OS user and
-  administrative configuration as trusted. Test ordinary inherited hooks
+- Check exact CLI versions before sending a prompt. For `prompt_only`,
+  disable host execution and workspace customization in the supported CLI
+  configuration. Treat the installed binary, OS user and administrative
+  configuration as trusted. Test ordinary inherited hooks
   and tool server config using a disposable workspace. For `workspace_read`,
   advertise a provider only after proving workspace confinement, denied
   writes and denied agent network access. Refuse profiles that cannot be
