@@ -180,13 +180,15 @@ async def run_child(
             raise Failure(
                 "unsupported_setting", "Windows requires a Proactor event loop."
             )
-        if not Path(sys.executable).is_absolute():
+        # A Windows venv redirector could spawn the handshake process before job assignment.
+        interpreter = getattr(sys, "_base_executable", None) or sys.executable
+        if not Path(interpreter).is_absolute():
             raise Failure(
                 "unsupported_setting", "Windows requires an absolute Python executable."
             )
         from ._windows import WindowsJob, bootstrap_args
 
-        command, creationflags = bootstrap_args(command)
+        command, creationflags = bootstrap_args(interpreter, command)
         spawn_options = {"creationflags": creationflags}
     spawn = asyncio.create_task(
         loop.subprocess_exec(

@@ -1,6 +1,5 @@
 import ctypes
 import subprocess
-import sys
 from ctypes import wintypes
 
 _EXTENDED_LIMIT_INFORMATION = 9
@@ -115,9 +114,9 @@ class WindowsJob:
             self._job = None
 
 
-def bootstrap_args(command: list[str]) -> tuple[list[str], int]:
+def bootstrap_args(interpreter: str, command: list[str]) -> tuple[list[str], int]:
     """Build a console-free isolated Python launcher for the job."""
     return (
-        [sys.executable, "-I", "-S", "-c", _BOOTSTRAP, *command],
+        [interpreter, "-I", "-S", "-c", _BOOTSTRAP, *command],
         subprocess.CREATE_NO_WINDOW,
     )
