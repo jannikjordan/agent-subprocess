@@ -3,6 +3,8 @@
 Read this file and [VISION.md](VISION.md) before changing the repository.
 These rules govern repository maintenance. Applications that import the
 library supply their own prompts, roles and operating policy.
+Update the relevant [integration documentation](docs/README.md) when changing
+the public contract or provider behavior.
 
 ## Roles
 

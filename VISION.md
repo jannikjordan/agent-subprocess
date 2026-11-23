@@ -99,26 +99,11 @@ with the Python standard library for process and stream handling. Add a
 dependency when a verified need justifies it. Distribute an importable
 package without a separate service.
 
-## References and evidence
+The [integration documentation](docs/README.md) describes the proposed Python
+contract and the checks needed before another project can rely on it.
 
-- The Corduno documentation assistant keeps provider sessions behind a local
-  bridge and streams updates to its browser. It uses Codex App Server and
-  Claude Code stream JSON, and records real-session results for the versions
-  it tested. This library will implement its own Python contract for broader
-  use. [Corduno documentation provider evidence](https://github.com/getcorduno/documentation/blob/59f041cd0061105c63e58772fa54e1b0d82bbb71/evidence/providers.md)
-- Codex `exec --json` is the starting point for headless jobs. It publishes
-  JSONL activity and completed messages. Codex App Server documents answer
-  deltas and thread controls for integrations that need them. The installed
-  `exec` help lists `--skip-git-repo-check` for explicitly selected non-Git
-  workspaces.
-  [Non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
-  [Configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
-  [App Server](https://learn.chatgpt.com/docs/app-server)
-- Claude Code documents `--print`, `--output-format stream-json`, optional
-  partial messages and native model, effort and permission controls.
-  [Programmatic Claude Code](https://code.claude.com/docs/en/headless)
-  [CLI reference](https://code.claude.com/docs/en/cli-reference)
-- On 2026-11-23, local version and help checks confirmed Codex CLI `0.171.0`
-  and Claude Code `2.1.330` as starting points for compatibility testing.
-  Model availability, tool restrictions and failure behavior still need live
-  tests for this library.
+The Corduno documentation assistant is the reference for embedded chat. Its
+local bridge uses Codex App Server and Claude Code stream JSON to update the
+browser. The [provider compatibility guide](docs/providers.md) records CLI
+references and separates the reference app's evidence from this library's
+verification. [Corduno documentation provider evidence](https://github.com/getcorduno/documentation/blob/59f041cd0061105c63e58772fa54e1b0d82bbb71/evidence/providers.md)
