@@ -122,6 +122,49 @@ def codex_config_options(cwd: Path, *extra: str) -> list[str]:
     return [argument for setting in options for argument in ("-c", setting)]
 
 
+def claude_command_options(
+    permissions: Permission,
+    model: str | None,
+    effort: str | None,
+    *,
+    input_format: str = "text",
+) -> list[str]:
+    """Build a restricted local Claude process for a prompt or control messages."""
+    args = [
+        "--print",
+        "--input-format",
+        input_format,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--include-partial-messages",
+        "--no-session-persistence",
+        "--safe-mode",
+        "--restricted",
+        "--no-chrome",
+        "--disable-slash-commands",
+        "--strict-mcp-config",
+        "--mcp-config",
+        '{"mcpServers":{}}',
+        "--settings",
+        '{"disableAllHooks":true,"disableClaudeAiConnectors":true,"fastMode":false}',
+        "--permission-prompts",
+        "none",
+        "--permission-mode",
+        "dontAsk",
+    ]
+    if permissions == "workspace_read":
+        tools = ",".join(_CLAUDE_READ_TOOLS)
+        args.extend(["--tools", tools, "--allowedTools", tools])
+    else:
+        args.extend(["--tools", ""])
+    if model:
+        args.extend(["--model", model])
+    if effort:
+        args.extend(["--effort", effort])
+    return args
+
+
 def command_options(request: RunRequest, cwd: Path) -> list[str]:
     for value in (request.model, request.effort):
         if value is not None and (
@@ -175,39 +218,9 @@ def command_options(request: RunRequest, cwd: Path) -> list[str]:
         return [*args, "-"]
 
     if request.provider == "claude":
-        args = [
-            "--print",
-            "--input-format",
-            "text",
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            "--include-partial-messages",
-            "--no-session-persistence",
-            "--safe-mode",
-            "--restricted",
-            "--no-chrome",
-            "--disable-slash-commands",
-            "--strict-mcp-config",
-            "--mcp-config",
-            '{"mcpServers":{}}',
-            "--settings",
-            '{"disableAllHooks":true,"disableClaudeAiConnectors":true,"fastMode":false}',
-            "--permission-prompts",
-            "none",
-            "--permission-mode",
-            "dontAsk",
-        ]
-        if request.permissions == "workspace_read":
-            tools = ",".join(_CLAUDE_READ_TOOLS)
-            args.extend(["--tools", tools, "--allowedTools", tools])
-        else:
-            args.extend(["--tools", ""])
-        if request.model:
-            args.extend(["--model", request.model])
-        if request.effort:
-            args.extend(["--effort", request.effort])
-        return args
+        return claude_command_options(
+            request.permissions, request.model, request.effort
+        )
 
     raise Failure("unsupported_setting", "Choose the codex or claude provider.")
 

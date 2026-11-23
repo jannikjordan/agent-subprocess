@@ -1,7 +1,7 @@
 # Integrate with an existing Python project
 
 The examples use the [public Python API](session-contract.md). Install the
-package and run the [offline example](../README.md#try-it-without-a-provider-account)
+package and run the [offline example](../README.md#try-the-example-offline)
 to see the proxy in a worker or request handler without using an account.
 
 ## Set up the worker

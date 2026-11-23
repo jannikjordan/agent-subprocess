@@ -1,10 +1,14 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 MAX_PROMPT_BYTES = 1_048_576
 
 Provider = Literal["codex", "claude"]
+AuthStatus = Literal["signed_in", "signed_out", "subscription_required", "unknown"]
+UsageStatus = Literal["not_requested", "available", "unavailable"]
+RateLimitKind = Literal["session", "weekly"]
 Permission = Literal["prompt_only", "workspace_read"]
 RunStatus = Literal["succeeded", "failed", "timed_out", "cancelled"]
 EventKind = Literal[
@@ -55,6 +59,31 @@ class RunError:
 
     code: str
     message: str
+
+
+@dataclass(frozen=True, slots=True)
+class RateLimitWindow:
+    """A provider-reported percentage and next reset for one quota window."""
+
+    kind: RateLimitKind
+    used_percent: float
+    resets_at: datetime | None
+    window_minutes: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderInfo:
+    """The installed CLI and a privacy-safe snapshot of its account status."""
+
+    provider: Provider
+    executable: Path | None = field(default=None, repr=False)
+    version: str | None = None
+    compatible: bool = False
+    auth_status: AuthStatus = "unknown"
+    plan: str | None = None
+    limits: tuple[RateLimitWindow, ...] = ()
+    usage_status: UsageStatus = "not_requested"
+    error: RunError | None = None
 
 
 @dataclass(frozen=True, slots=True)
