@@ -1,21 +1,28 @@
-# Provider CLI Proxy integration docs
+# Agent Subprocess documentation
 
-Install the package and try the offline example from the
-[project README](../README.md). The [provider guide](providers.md) records
-which features have been checked against the official CLIs.
+Start with the [offline example](../examples/analysis_job/README.md).
+It loads a file, starts a fake CLI and prints the result. Use it to check
+your Python setup before signing in to a provider.
 
-| If you need to | Read |
+| Task | Guide |
 | --- | --- |
-| Add analysis, chat or background work to an existing project | [Integration guide](integration.md) |
-| Build or consume the Python API | [Session contract](session-contract.md) |
-| Check model, effort, permissions and event support | [Provider compatibility](providers.md) |
-| Verify library behavior or an app integration | [Verification](verification.md) |
-| Pin an upgrade or report an integration problem | [Versions and issues](versioning.md) |
+| Call the library from a script, personal assistant or job worker | [Integration guide](integration.md) |
+| Look up request fields, events and error codes | [Python session contract](session-contract.md) |
+| Check CLI versions, installation paths or permission modes | [Provider compatibility](providers.md) |
+| Test a change or a consuming project | [Verification](verification.md) |
+| Pin a revision, report a bug or prepare a release | [Versions and issues](versioning.md) |
 
-Review the host project's worker, authentication and UI conventions before
-integrating. Use its existing queue, access controls and rendering. Pin a
-verified revision and check its compatibility record. The proxy launches and
-observes a local CLI session. The host project decides what work to run and
-what to do with the answer.
+## For integration agents
 
-See the [project vision](../VISION.md) for the delivery order.
+1. Read the host project's instructions and check the
+   [personal-use scope](../README.md#personal-use).
+2. Pin a reviewed revision and use the public imports from
+   `agent_subprocess`. Match the provider executable to the compatibility
+   table before writing live checks.
+3. Start with `Client.run()` and the default `prompt_only` profile. Add
+   streaming or workspace access only when the host project needs it.
+   The host chooses the workspace and owns job scheduling and rendering.
+4. Test with fixture processes and synthetic data first. Check the terminal
+   result before using the answer and keep account data out of logs and issues.
+
+[Project vision](../VISION.md) · [Maintenance instructions](../AGENTS.md)

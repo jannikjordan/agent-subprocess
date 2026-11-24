@@ -1,4 +1,4 @@
-# Maintaining provider-cli-proxy
+# Maintaining agent-subprocess
 
 Read this file and [VISION.md](VISION.md) before changing the repository.
 These rules govern repository maintenance. Applications that import the

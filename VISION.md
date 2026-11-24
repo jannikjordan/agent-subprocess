@@ -1,4 +1,4 @@
-# Provider CLI Proxy
+# Agent Subprocess
 
 A Python library for running Codex and Claude Code from an existing
 application or script. A caller selects the provider, model, effort,
@@ -8,9 +8,8 @@ library uses the official, installed provider CLIs on the worker host.
 
 ## Who uses it
 
-- An embedded assistant sends the current page context and a user's question.
-  The web app streams available updates and renders the returned text.
-  The app owns chat history, access control and Markdown or rich rendering.
+- A personal web app sends page context and the owner's question to an
+  installed CLI. The app streams updates and owns chat history and rendering.
 - A script asks a CLI to read and follow `task.md`, or supplies the prompt
   directly. It waits for the final answer and a status it can handle in code.
 - A background worker runs a data analysis job in a specified workspace.
@@ -52,10 +51,9 @@ mapping fails explicitly. Model names and efforts are provider-specific.
 The host supplies the installed binary, account setup and workspace. Keep
 credentials with the official CLI. Make account or billing-mode changes
 explicit caller decisions. A local CLI still sends prompts and any selected
-context to its configured provider. Hosted use requires its own review of
-provider terms, authentication and tenant isolation. For Claude, Anthropic
-describes end-user sign-in in the unmodified CLI and sets separate rules
-for developers routing requests on behalf of users. [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)
+context to its configured provider. The subscription-backed integration is
+for personal automation under your own account. See the
+[personal use note](README.md#personal-use) for the provider terms.
 
 Default to the access needed for the prompt mode. Deny unattended approval
 requests and reject permission policies the adapter cannot enforce before
@@ -100,7 +98,7 @@ with the Python standard library for process and stream handling. Add a
 dependency when a verified need justifies it. Distribute an importable
 package without a separate service.
 
-The [integration documentation](docs/README.md) describes the proposed Python
+The [integration documentation](docs/README.md) describes the current Python
 contract and the checks needed before another project can rely on it.
 
 The Corduno documentation assistant is the reference for embedded chat. Its

@@ -198,7 +198,7 @@ class _ClaudeUsageRead:
 class _CodexAccountRead:
     def __init__(self, include_usage: bool) -> None:
         try:
-            package_version = version("provider-cli-proxy")
+            package_version = version("agent-subprocess")
         except PackageNotFoundError:
             package_version = "0.0.0"
         self.initial = _rpc(
@@ -207,7 +207,7 @@ class _CodexAccountRead:
                 "method": "initialize",
                 "params": {
                     "clientInfo": {
-                        "name": "provider_cli_proxy",
+                        "name": "agent_subprocess",
                         "version": package_version,
                     }
                 },

@@ -1,6 +1,6 @@
 # Python session contract
 
-Import the public types from `provider_cli_proxy`. See the
+Import the public types from `agent_subprocess`. See the
 [compatibility record](providers.md) for supported runtime features.
 
 ## Request
@@ -36,7 +36,7 @@ workspace and the requested permission profile independently of prompt text.
   of a still-active run. Expected startup failures yield a session with a
   failed result and a `finished` event.
 - Use an application-owned run ID to route events and cancellation. The
-  proxy supplies its own run ID for correlation. The native session ID has
+  library supplies its own run ID for correlation. The native session ID has
   meaning only to its provider.
 - The process runner continually drains stdout and stderr. A client waiting
   without reading events can still finish. If the queue fills at 128 pending
@@ -59,7 +59,7 @@ usage explicitly to get `RateLimitWindow` entries where reported. See
 ## Events and results
 
 Each event has a run ID, a provider, a kind and a per-run sequence number.
-Sequence gives the order observed by the proxy. The event stream ends with
+Sequence gives the order observed by the library. The event stream ends with
 one `finished` event carrying a `RunResult`, including when startup fails.
 
 | Event | Meaning |

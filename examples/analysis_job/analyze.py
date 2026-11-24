@@ -1,4 +1,4 @@
-"""Run a file-backed analysis job through the public proxy API."""
+"""Run a file-backed analysis job through the public Python API."""
 
 import argparse
 import asyncio
@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from provider_cli_proxy import Client, Prompt, RunRequest
+from agent_subprocess import Client, Prompt, RunRequest
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
 

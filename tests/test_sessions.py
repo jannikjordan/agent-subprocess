@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from _process_fixture import lock_byte
-from provider_cli_proxy import Client, Prompt, RunRequest
+from agent_subprocess import Client, Prompt, RunRequest
 
 
 CODEX_RESULT = """
@@ -37,7 +37,7 @@ emit({'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'Read
 """
 
 CLI_VERSIONS = {"codex": "codex-cli 0.171.0", "claude": "2.1.330 (Claude Code)"}
-WORKSPACE_POLICY = "provider_cli_proxy._providers._WORKSPACE_READ_SUPPORTED"
+WORKSPACE_POLICY = "agent_subprocess._providers._WORKSPACE_READ_SUPPORTED"
 PROCESS_FIXTURE = Path(__file__).with_name("_process_fixture.py").resolve()
 CODEX_ACCOUNT = {
     "account": {"type": "chatgpt", "planType": "prolite"},
@@ -366,7 +366,7 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
 
     async def test_no_discovery_candidate_returns_cli_missing(self):
         with patch(
-            "provider_cli_proxy._discovery._candidate_paths", return_value=iter(())
+            "agent_subprocess._discovery._candidate_paths", return_value=iter(())
         ):
             _, result = await self.stream(Client(), self.request())
         self.assertEqual(result.error.code, "cli_missing")
@@ -375,7 +375,7 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
         shim = self.root / "codex.cmd"
         shim.write_text("@exit /b 1\n", encoding="utf-8")
         with patch(
-            "provider_cli_proxy._discovery._candidate_paths", return_value=iter((shim,))
+            "agent_subprocess._discovery._candidate_paths", return_value=iter((shim,))
         ):
             _, result = await self.stream(Client(), self.request())
         self.assertEqual(result.error.code, "cli_missing")
@@ -409,11 +409,11 @@ assert sys.argv[sys.argv.index('--permission-mode') + 1] == 'dontAsk'
 
         with (
             patch(
-                "provider_cli_proxy._client.executable_candidates",
+                "agent_subprocess._client.executable_candidates",
                 return_value=iter((unusable, unsupported, verified)),
             ),
-            patch("provider_cli_proxy._client.run_child", side_effect=run_fixture),
-            patch("provider_cli_proxy._client.check_subscription") as check,
+            patch("agent_subprocess._client.run_child", side_effect=run_fixture),
+            patch("agent_subprocess._client.check_subscription") as check,
         ):
             result = await Client().run(self.request())
         self.assertEqual(result.text, "Ready.")
@@ -569,7 +569,7 @@ Path({str(ready)!r}).touch()
     async def test_process_tree_is_cleaned_up_when_leader_exits(self):
         lock, ready, source = self.locked_process("descendant")
         child_code = source + "\nimport time\ntime.sleep(60)\n"
-        # The output pipes stay open until the proxy stops the descendant.
+        # The output pipes stay open until the library stops the descendant.
         binary = self.fake(
             f"""
 subprocess.Popen([sys.executable, '-c', {child_code!r}], stdout=sys.stdout, stderr=sys.stderr)
@@ -637,7 +637,7 @@ time.sleep(60)
 
         client = Client(executables={"codex": (sys.executable, str(script))})
         with (
-            patch("provider_cli_proxy._windows.WindowsJob", side_effect=OSError),
+            patch("agent_subprocess._windows.WindowsJob", side_effect=OSError),
             patch.object(loop, "subprocess_exec", capture_startup),
         ):
             events, result = await self.stream(client, self.request())

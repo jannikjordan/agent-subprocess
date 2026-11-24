@@ -3,10 +3,12 @@ requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "provider-cli-proxy"
+name = "agent-subprocess"
 version = "0.2.1"
-description = "Run Codex and Claude Code sessions from Python"
+description = "Run installed AI CLIs from Python"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -19,4 +21,4 @@ classifiers = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-provider_cli_proxy = ["py.typed"]
+agent_subprocess = ["py.typed"]

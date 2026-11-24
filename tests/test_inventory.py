@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from provider_cli_proxy import Client, ProviderInfo, RateLimitWindow
+from agent_subprocess import Client, ProviderInfo, RateLimitWindow
 
 CODEX_VERSION = "codex-cli 0.171.0"
 CLAUDE_VERSION = "2.1.330 (Claude Code)"

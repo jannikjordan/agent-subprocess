@@ -86,7 +86,7 @@ installation.
 | Linux | Native user installs, Linuxbrew, standard npm prefixes and standard system and user binary locations |
 | Windows | Native installer locations, WinGet links and recognized packages, and native payloads under standard npm prefixes |
 
-`codex app-server` is a command on the full Codex CLI. The proxy uses it to
+`codex app-server` is a command on the full Codex CLI. The library uses it to
 read account status and uses `codex exec` for inference. An installation
 providing a standalone App Server component needs the full CLI for this API.
 
@@ -95,7 +95,7 @@ providing a standalone App Server component needs the full CLI for this API.
 
 ## Subscription sign-in
 
-The proxy checks the selected CLI account before sending prompt text. Codex
+The library checks the selected CLI account before sending prompt text. Codex
 uses a one-shot App Server `account/read` probe. Claude Code uses
 `auth status --json`. The check reads the authenticated account and its
 plan, and keeps returned identities and diagnostics out of results.
@@ -147,7 +147,7 @@ installed using a command shim, point the client at the native executable
 with the `executables` setting. The process runner uses Win32 Job Objects
 for cancellation and cleanup, and requires the default Python Proactor
 event loop. Hosted or embedded applications using a Selector event loop
-can run the proxy in a dedicated worker process.
+can run the library in a dedicated worker process.
 
 [Codex release binaries](https://github.com/openai/codex/releases/tag/rust-v0.171.0)
 [Claude Code setup on Windows](https://code.claude.com/docs/en/setup#setup-on-windows)

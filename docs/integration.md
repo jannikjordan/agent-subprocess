@@ -1,8 +1,10 @@
 # Integrate with an existing Python project
 
-The examples use the [public Python API](session-contract.md). Install the
-package and run the [offline example](../README.md#try-the-example-offline)
-to see the proxy in a worker or request handler without using an account.
+Run the [offline example](../examples/analysis_job/README.md) to see a
+complete request before connecting your own script, local web app or job
+worker. These examples use the [public Python API](session-contract.md).
+Follow the [personal-use scope](../README.md#personal-use) for
+subscription-backed runs.
 
 ## Set up the worker
 
@@ -11,9 +13,9 @@ to see the proxy in a worker or request handler without using an account.
    for that binary version, OS and permission profile. On Windows, install
    the native executable and run with Python's default Proactor event loop.
 2. Resolve the provider, model, effort, deadline and workspace from trusted
-   application settings. If the app lets users select a model or provider,
-   validate the selection against the app's allowlist. Resolve workspace
-   paths against a root authorized for that user or job.
+   application settings. Validate model and provider choices against the
+   app's allowlist. Resolve workspace paths against the configured root for
+   the job.
 3. Choose the prompt source in the application. Use `Prompt.text(...)` for
    inline instructions. Use `Prompt.from_file(...)` to load a trusted file
    in Python and send its contents as the starting prompt. Use a text prompt
@@ -29,7 +31,7 @@ The settings values come from the consuming project.
 ```python
 from pathlib import Path
 
-from provider_cli_proxy import Client, Prompt, Provider, RunRequest, RunResult
+from agent_subprocess import Client, Prompt, Provider, RunRequest, RunResult
 
 
 async def analyze(
@@ -63,14 +65,14 @@ or web server, await it on the existing event loop.
 
 ## Stream an assistant response
 
-The app turns the shared events into its existing stream format. For an
-embedded chat, build the request from authorized page context and the user's
-message. The browser app owns display and safe Markdown rendering.
+Connect a personal assistant to the app's existing stream. Build the
+request from your message and page context you can send to the provider.
+The browser app handles display and safe Markdown rendering.
 
 ```python
 from collections.abc import AsyncIterator
 
-from provider_cli_proxy import Client, RunEvent, RunRequest
+from agent_subprocess import Client, RunEvent, RunRequest
 
 
 async def assistant_events(
@@ -91,13 +93,13 @@ to the app's job events from the browser.
 
 ## Run from an existing job queue
 
-- Let the queue own the durable job ID and the worker own each live proxy
-  session. Map the job ID and attempt ID to the proxy run ID. Native IDs are
-  optional diagnostic metadata in this release.
-- Publish events under the app's job access rules and store the result after
+- Let the queue own the durable job ID and the worker own each live
+  session. Map the job and attempt IDs to the library's run ID. Native IDs
+  are optional diagnostic metadata.
+- Deliver events through the app's job stream and store the result after
   checking its terminal status. For a machine-readable handoff, parse and
   validate the answer in the app before taking an action.
-- Route user cancellation to the worker that owns the live session.
+- Route cancellation to the worker that owns the live session.
   Base retry decisions on the error and any side effects of the previous
   attempt. On worker loss, use the queue's reconciliation and retry policy.
   A native provider session ID identifies conversation history. The queue
@@ -105,4 +107,4 @@ to the app's job events from the browser.
 
 Use the app's transcript retention and access rules. Keep raw tool output and
 provider diagnostics out of browser responses. See the [integration checks](verification.md#consuming-project-checks)
-before enabling a caller-facing entry point.
+before enabling a live entry point.
