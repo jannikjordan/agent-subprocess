@@ -11,6 +11,7 @@ def account_status(provider: str) -> bool:
     """Answer the CLI subscription preflight using synthetic data."""
     if provider == "codex" and sys.argv[2:3] == ["app-server"]:
         initialize = json.loads(sys.stdin.readline())
+        assert initialize["params"]["clientInfo"]["name"] == "agent_subprocess"
         print(json.dumps({"id": initialize["id"], "result": {}}), flush=True)
         assert json.loads(sys.stdin.readline())["method"] == "initialized"
         request = json.loads(sys.stdin.readline())
@@ -45,7 +46,7 @@ def account_status(provider: str) -> bool:
 
 
 def emit(kind: str, **fields: object) -> None:
-    """Write one JSON Lines record to the proxy."""
+    """Write one JSON Lines record to the library."""
     print(json.dumps({"type": kind, **fields}), flush=True)
 
 

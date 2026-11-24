@@ -51,9 +51,10 @@ the tag points to the merged commit and the notes match `CHANGELOG.md`.
 
 ## Consuming project checks
 
-- Run one real request through the application's normal entry point. Check
-  the model and workspace selection and confirm the app can show the final
-  answer even when a provider offers no answer deltas.
+- Start with a fixture request through the application's normal entry
+  point. On an authorized personal setup, opt in to a live check with
+  synthetic data. Verify the model and workspace selection and confirm the
+  result displays even when a provider offers no answer deltas.
 - Exercise a missing runtime, rejected workspace and timeout. Confirm
   failures appear in the app's normal error path without exposing provider
   diagnostics.

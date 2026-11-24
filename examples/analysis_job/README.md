@@ -1,12 +1,33 @@
 # Ticket-count analysis job
 
-The example reads [task.md](task.md), sends the synthetic ticket counts to
-the proxy, and prints the final answer. The offline CLI fixtures let you
-check the public API without credentials or provider traffic.
+Start with [minimal.py](minimal.py). It reads synthetic ticket counts from
+[task.md](task.md), runs a fake Codex CLI and prints the answer. The whole
+example runs without a provider account or inference.
 
-## Install and run
+## Start with one file
 
-On macOS and Linux, run these commands from the repository root.
+After installing the library, run this from the repository root.
+
+```sh
+python examples/analysis_job/minimal.py
+```
+
+The result appears on stdout.
+
+```text
+18 tickets closed. Wednesday had the highest count with 9.
+```
+
+In the script, `Prompt.from_file()` loads the task and `Client.run()` waits
+for the answer. The `executables` argument points the client to the
+[fixture](fake_provider.py). For a live personal script, use `Client()`
+with an installed, signed-in CLI and update the provider in your request.
+See [personal use](../../README.md#personal-use).
+
+## Try another provider or stream updates
+
+If you need an isolated environment, set it up from the repository root.
+Use these commands on macOS or Linux.
 
 ```sh
 python3 -m venv .venv
@@ -14,7 +35,8 @@ source .venv/bin/activate
 python -m pip install .
 ```
 
-Run either provider fixture in either mode.
+The [full runner](analyze.py) can wait for the answer or print updates as
+they arrive.
 
 ```sh
 python examples/analysis_job/analyze.py run --provider codex
@@ -26,6 +48,7 @@ In Windows PowerShell, use the virtual environment's Python directly.
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install .
+.\.venv\Scripts\python.exe examples/analysis_job/minimal.py
 .\.venv\Scripts\python.exe examples/analysis_job/analyze.py run --provider codex
 .\.venv\Scripts\python.exe examples/analysis_job/analyze.py stream --provider claude
 ```

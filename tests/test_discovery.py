@@ -5,7 +5,7 @@ from contextlib import chdir
 from pathlib import Path
 from unittest.mock import patch
 
-from provider_cli_proxy import _discovery
+from agent_subprocess import _discovery
 
 
 class DiscoveryTest(unittest.TestCase):

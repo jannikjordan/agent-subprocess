@@ -1,4 +1,4 @@
-"""Smoke-test the public proxy API from the example application."""
+"""Smoke-test the public Python API from the example application."""
 
 import subprocess
 import sys
@@ -11,6 +11,24 @@ from analyze import workspace_prompt
 
 class AnalysisJobTest(unittest.TestCase):
     """Exercise both providers through the example's normal commands."""
+
+    def test_minimal_example_runs_outside_the_checkout(self) -> None:
+        """The minimal script finds its fixture and prompt beside the script."""
+        script = Path(__file__).with_name("minimal.py").resolve()
+        with TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [sys.executable, str(script)],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "18 tickets closed. Wednesday had the highest count with 9.\n",
+        )
+        self.assertEqual(result.stderr, "")
 
     def test_offline_results_and_events(self) -> None:
         """Keep final text separate from progress for both providers."""

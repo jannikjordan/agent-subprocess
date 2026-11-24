@@ -18,7 +18,7 @@ SPEC.loader.exec_module(release)
 BEFORE = "a" * 40
 AFTER = "b" * 40
 TAG = "v0.2.1"
-REPO = "example/provider-cli-proxy"
+REPO = "example/agent-subprocess"
 NOTES = "### Added\n\n- Café release notes.\n"
 CHANGELOG = f"# Changelog\n\n## 0.2.10\n\nOther notes\n\n## 0.2.1\n\n{NOTES}\n## 0.2.0\n\nOlder notes"
 

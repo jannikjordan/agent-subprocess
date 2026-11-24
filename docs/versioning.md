@@ -2,13 +2,16 @@
 
 ## Pin a version
 
-Pick a published tag from [Releases](https://github.com/jannikjordan/provider-cli-proxy/releases).
-Replace `vX.Y.Z` with that tag. While a release is pending, install from the
-full commit SHA you reviewed.
+Version `v0.3.0` is the first release with the `agent-subprocess`
+distribution and the `agent_subprocess` import. Pick a published tag from
+[GitHub Releases](https://github.com/jannikjordan/provider-cli-proxy/releases).
 
 ```sh
-python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@vX.Y.Z"
+python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@v0.3.0"
 ```
+
+For changes awaiting a release, replace the tag with a full commit SHA
+you have reviewed.
 
 The package version in `pyproject.toml` tracks the Python API. CLI
 compatibility is a separate pin in the [provider guide](providers.md).
@@ -43,5 +46,4 @@ prompts out of issues.
   rerun it on the same commit. The job can reuse a tag at that commit from
   a partial run. It stops if the tag points elsewhere.
 - Consumers install from Git tags. The checks build and install the package
-  for verification. The tag and notes are the distribution for this private
-  library.
+  for verification. The workflow publishes a source tag and release notes on GitHub.
