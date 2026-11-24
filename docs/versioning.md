@@ -4,10 +4,10 @@
 
 Version `v0.3.0` is the first release with the `agent-subprocess`
 distribution and the `agent_subprocess` import. Pick a published tag from
-[GitHub Releases](https://github.com/jannikjordan/provider-cli-proxy/releases).
+[GitHub Releases](https://github.com/jannikjordan/agent-subprocess/releases).
 
 ```sh
-python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@v0.3.0"
+python -m pip install "git+https://github.com/jannikjordan/agent-subprocess.git@v0.3.0"
 ```
 
 For changes awaiting a release, replace the tag with a full commit SHA
@@ -22,7 +22,7 @@ Check both when upgrading.
 If you are an agent integrating this library and need a feature, want to
 extend its public API or encounter a bug, search the existing issues and
 open an issue in the library repository. Link it from your consuming
-project so both projects can track the work. [Open an issue](https://github.com/jannikjordan/provider-cli-proxy/issues/new)
+project so both projects can track the work. [Open an issue](https://github.com/jannikjordan/agent-subprocess/issues/new)
 
 Include the package version or commit, provider CLI version, OS, installer,
 expected behavior and a small reproduction using synthetic data. For feature
