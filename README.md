@@ -61,7 +61,7 @@ Activate a Python 3.11+ virtual environment. Clone the repository and
 install from the source checkout.
 
 ```sh
-git clone https://github.com/jannikjordan/provider-cli-proxy.git agent-subprocess
+git clone https://github.com/jannikjordan/agent-subprocess.git
 cd agent-subprocess
 python -m pip install .
 ```
