@@ -57,14 +57,17 @@ Each provider's terms govern access to its service.
 
 ## Quick start
 
-Activate a Python 3.11+ virtual environment. Check out `dev` to try the
-renamed package today.
+Activate a Python 3.11+ virtual environment. Clone the repository and
+install from the source checkout.
 
 ```sh
-git clone --branch dev https://github.com/jannikjordan/provider-cli-proxy.git agent-subprocess
+git clone https://github.com/jannikjordan/provider-cli-proxy.git agent-subprocess
 cd agent-subprocess
 python -m pip install .
 ```
+
+See [versions and releases](docs/versioning.md#pin-a-version) to pin a
+release in another project.
 
 Install a [supported CLI version](docs/providers.md) and sign in through the
 CLI. Save the script below as `hello_agent.py` and run

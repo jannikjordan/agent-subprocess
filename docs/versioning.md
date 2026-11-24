@@ -2,17 +2,16 @@
 
 ## Pin a version
 
-Until the first Agent Subprocess release, install from a reviewed commit on
-`dev`. The existing `v0.2.1` release uses the earlier package name. Check
-the release notes for a tag that installs `agent-subprocess` and imports
-`agent_subprocess`. [GitHub releases](https://github.com/jannikjordan/provider-cli-proxy/releases)
+Version `v0.3.0` is the first release with the `agent-subprocess`
+distribution and the `agent_subprocess` import. Pick a published tag from
+[GitHub Releases](https://github.com/jannikjordan/provider-cli-proxy/releases).
 
 ```sh
-python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@COMMIT_SHA"
+python -m pip install "git+https://github.com/jannikjordan/provider-cli-proxy.git@v0.3.0"
 ```
 
-Replace `COMMIT_SHA` with the full revision. Once the renamed package has
-a release, you can use its tag in place of the SHA.
+For changes awaiting a release, replace the tag with a full commit SHA
+you have reviewed.
 
 The package version in `pyproject.toml` tracks the Python API. CLI
 compatibility is a separate pin in the [provider guide](providers.md).

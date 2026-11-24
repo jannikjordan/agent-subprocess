@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
-- Rebrand the Python distribution as `agent-subprocess` and the import as
-  `agent_subprocess`.
-- Add the MIT license, update the integration guides and add a short offline
-  example.
+- Rename the Python distribution to `agent-subprocess` and the import to
+  `agent_subprocess`. Update dependency declarations and imports when
+  upgrading from an earlier release.
+- Publish the library and documentation under the MIT license.
+- Add a one-command offline example and guides for people and agents
+  integrating the library.
 
 ## 0.2.1
 
